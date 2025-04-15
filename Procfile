@@ -1,1 +1,1 @@
-web: node interviewace/server.js
+web: node server.js
