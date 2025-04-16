@@ -24,6 +24,21 @@ async function copyBuildFiles() {
     // Copy files from src/dist to root/dist
     await fs.copy(srcPath, destPath);
     console.log(`Successfully copied build files from ${srcPath} to ${destPath}`);
+    
+    // Also copy our default CSS file
+    try {
+      const defaultCssPath = path.join(__dirname, 'default-styles.css');
+      const defaultCssExists = await fs.pathExists(defaultCssPath);
+      
+      if (defaultCssExists) {
+        const assetsPath = path.join(destPath, 'assets');
+        await fs.ensureDir(assetsPath);
+        await fs.copy(defaultCssPath, path.join(assetsPath, 'default-styles.css'));
+        console.log('Successfully copied default styles to assets folder');
+      }
+    } catch (cssErr) {
+      console.warn('Could not copy default CSS file:', cssErr.message);
+    }
   } catch (err) {
     console.error('Error copying build files:', err);
     process.exit(1);

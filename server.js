@@ -9,6 +9,8 @@ import net from 'net';
 import * as dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import { execSync } from 'child_process';
+// Import the Tailwind middleware
+import { tailwindMiddleware, generateInlineTailwind } from './tailwind-inline.js';
 
 dotenv.config();
 
@@ -243,18 +245,63 @@ if (IS_PRODUCTION) {
   const buildPath = path.join(__dirname, 'dist');
   console.log(`Serving static files from: ${buildPath}`);
   
-  // Serve static files with explicit MIME types for CSS and other assets
-  app.use(express.static(buildPath, {
+  // Cache static assets for improved performance
+  const staticOptions = {
+    etag: true,
+    lastModified: true,
     setHeaders: (res, filePath) => {
+      // Set cache headers for different file types
+      const maxAge = 31536000; // 1 year for static assets
+      
+      // Set appropriate MIME types to ensure browser renders correctly
       if (filePath.endsWith('.css')) {
         res.setHeader('Content-Type', 'text/css');
+        res.setHeader('Cache-Control', `public, max-age=${maxAge}`);
       } else if (filePath.endsWith('.js')) {
         res.setHeader('Content-Type', 'application/javascript');
+        res.setHeader('Cache-Control', `public, max-age=${maxAge}`);
       } else if (filePath.endsWith('.json')) {
         res.setHeader('Content-Type', 'application/json');
+      } else if (filePath.endsWith('.svg')) {
+        res.setHeader('Content-Type', 'image/svg+xml');
+      } else if (filePath.endsWith('.png')) {
+        res.setHeader('Content-Type', 'image/png');
+      } else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+        res.setHeader('Content-Type', 'image/jpeg');
+      } else if (filePath.endsWith('.woff2')) {
+        res.setHeader('Content-Type', 'font/woff2');
+      } else if (filePath.endsWith('.woff')) {
+        res.setHeader('Content-Type', 'font/woff');
       }
     }
-  }));
+  };
+  
+  // Add a debug middleware to log asset requests
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api') && !req.path.includes('.')) {
+      console.log(`Page request: ${req.path}`);
+    } else if (!req.path.startsWith('/api') && req.path.includes('.')) {
+      console.log(`Asset request: ${req.path}`);
+    }
+    next();
+  });
+  
+  // Try to import Tailwind middleware if available
+  import('./tailwind-inline.js')
+    .then(module => {
+      const { tailwindMiddleware, generateInlineTailwind } = module;
+      // Generate fallback Tailwind CSS
+      generateInlineTailwind().catch(err => console.warn('Error generating fallback styles:', err.message));
+      // Use the middleware
+      app.use(tailwindMiddleware(buildPath));
+      console.log('Tailwind middleware enabled');
+    })
+    .catch(err => {
+      console.warn('Tailwind middleware not available:', err.message);
+    });
+  
+  // Serve static files with explicit MIME types
+  app.use(express.static(buildPath, staticOptions));
   
   // For any route not matching an API route, serve the index.html
   app.get('*', (req, res) => {
