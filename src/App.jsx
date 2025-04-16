@@ -29,27 +29,28 @@ import Signup from './Signup.jsx';             // Import from src
 // Fix the version mismatch - update worker to version 3.11.174 to match the API version
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
+// API URL Configuration
+const apiUrl = '/api/generate-answer'; // Use relative path for deployment
+
 function App() {
   const { user, session, signOut } = useAuth(); // Use the auth hook
-  const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
+  // Remove authMode state for now, will re-introduce if using modal
+  // const [authMode, setAuthMode] = useState('login'); 
 
   // State variables
-  const [resumeText, setResumeText] = useState(() => localStorage.getItem('resumeText') || '');
+  const [resumeText, setResumeText] = useState(''); // Initialize empty, load later
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [fileName, setFileName] = useState(() => localStorage.getItem('fileName') || '');
+  const [fileName, setFileName] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [jobTitle, setJobTitle] = useState(() => localStorage.getItem('jobTitle') || '');
-  const [jobCompany, setJobCompany] = useState(() => localStorage.getItem('jobCompany') || '');
-  const [jobDescription, setJobDescription] = useState(() => localStorage.getItem('jobDescription') || '');
-  const [jobResponsibilities, setJobResponsibilities] = useState(() => localStorage.getItem('jobResponsibilities') || '');
+  const [jobTitle, setJobTitle] = useState('');
+  const [jobCompany, setJobCompany] = useState('');
+  const [jobDescription, setJobDescription] = useState('');
+  const [jobResponsibilities, setJobResponsibilities] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [recentAnswers, setRecentAnswers] = useState(() => {
-    const saved = localStorage.getItem('recentAnswers');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [recentAnswers, setRecentAnswers] = useState([]);
   const [copied, setCopied] = useState(false);
   const [showTips, setShowTips] = useState(false);
   const [manualInputMode, setManualInputMode] = useState(false);
@@ -60,28 +61,18 @@ function App() {
   const recognitionRef = useRef(null);
   const answerRef = useRef(null);
 
-  // Function to clear saved resume and job data
-  const clearSavedData = () => {
-    localStorage.removeItem('resumeText');
-    localStorage.removeItem('fileName');
-    localStorage.removeItem('jobTitle');
-    localStorage.removeItem('jobCompany');
-    localStorage.removeItem('jobDescription');
-    localStorage.removeItem('jobResponsibilities');
-    setResumeText('');
-    setFileName('');
-    setJobTitle('');
-    setJobCompany('');
-    setJobDescription('');
-    setJobResponsibilities('');
-  };
-
-  // Auto-scroll to the answer when generated
+  // --- Load/Save Data Logic (Placeholder for DB interaction) ---
+  // We removed localStorage persistence. Data is now in-memory per session.
+  // Will add Supabase loading/saving based on 'user' state later.
   useEffect(() => {
-    if (answer && answerRef.current) {
-      answerRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [answer]);
+    // Placeholder: If we were loading data for a logged-in user, we'd do it here.
+    // Example: if (user) { loadDataFromSupabase(user.id); }
+    // For now, data resets on refresh.
+    console.log("Current user:", user);
+    // Clear potentially stale data if user logs out or logs in
+    // You might want more sophisticated state management later
+    // clearAllAppData(); // Example function call
+  }, [user]);
 
   const handleFileChange = async (event) => {
     const file = event.target.files[0];
@@ -226,9 +217,6 @@ function App() {
     setAnswer('');
     
     try {
-      // Use relative API URL for deployment compatibility
-      const apiUrl = '/api/generate-answer';
-      
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -268,8 +256,6 @@ function App() {
       
       const updatedAnswers = [newAnswer, ...recentAnswers.slice(0, 9)];
       setRecentAnswers(updatedAnswers);
-      localStorage.setItem('recentAnswers', JSON.stringify(updatedAnswers));
-      
     } catch (error) {
       console.error('Error generating answer:', error);
       alert('Error generating answer. Please try again.');
@@ -369,23 +355,10 @@ function App() {
     window.scrollTo({ top: answerRef.current?.offsetTop || 0, behavior: 'smooth' });
   };
 
-  // Auth Container for Login/Signup
-  const AuthContainer = () => (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      {authMode === 'login' ? (
-        <Login onSwitchMode={() => setAuthMode('signup')} />
-      ) : (
-        <Signup onSwitchMode={() => setAuthMode('login')} />
-      )}
-    </div>
-  );
+  // --- Main App Rendering (Always render) --- 
+  // No more conditional rendering based on user
+  // if (!user) { return <AuthContainer />; }
 
-  // Render Auth or Main App
-  if (!user) { // If no user session, show AuthContainer
-    return <AuthContainer />;
-  }
-
-  // Main App Content (Rendered when user IS logged in)
   return (
     <div className="min-h-screen bg-gray-100 text-gray-800 flex flex-col">
       {/* Header */}
@@ -395,19 +368,40 @@ function App() {
             <div className="flex items-center">
               <h1 className="text-xl font-bold text-primary-600">InterviewAce</h1>
             </div>
-            {user && (
-              <div>
-                <span className="text-sm text-gray-600 mr-4 hidden sm:inline">{user.email}</span>
-                <Button onClick={signOut} variant="secondary" size="sm">
-                  Logout
-                </Button>
-              </div>
-            )}
+            <div>
+              {user ? (
+                // Logged-in state: Show email and Logout button
+                <div className="flex items-center space-x-3">
+                  <span className="text-sm text-gray-600 hidden sm:inline">{user.email}</span>
+                  <Button onClick={signOut} variant="secondary" size="sm">
+                    Logout
+                  </Button>
+                </div>
+              ) : (
+                // Logged-out state: Show Login and Signup buttons
+                <div className="flex items-center space-x-2">
+                  <Button 
+                    onClick={() => alert('Login functionality to be added.')} 
+                    variant="secondary" 
+                    size="sm"
+                  >
+                    Login
+                  </Button>
+                  <Button 
+                    onClick={() => alert('Signup functionality to be added.')} 
+                    variant="primary" 
+                    size="sm"
+                  >
+                    Sign Up
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content Area - Renders only if user exists */}
+      {/* Main Content Area - Always Renders */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           
@@ -473,7 +467,7 @@ function App() {
                   <div className="flex space-x-2">
                     <Button 
                       variant="danger"
-                      onClick={clearSavedData}
+                      onClick={() => { setResumeText(''); setFileName(''); }}
                       className="text-xs"
                     >
                       Clear Resume & Job Data
