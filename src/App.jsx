@@ -21,10 +21,18 @@ import UploadDropzone from './components/UploadDropzone';
 import AnswerDisplay from './components/AnswerDisplay';
 import HistoryItem from './components/HistoryItem';
 
+// Import Auth related components and hook
+import { useAuth } from './context/AuthContext'; // Correct path
+import Login from './Login.jsx';              // Import from src
+import Signup from './Signup.jsx';             // Import from src
+
 // Fix the version mismatch - update worker to version 3.11.174 to match the API version
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 function App() {
+  const { user, session, signOut } = useAuth(); // Use the auth hook
+  const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
+
   // State variables
   const [resumeText, setResumeText] = useState(() => localStorage.getItem('resumeText') || '');
   const [question, setQuestion] = useState('');
@@ -67,16 +75,6 @@ function App() {
     setJobDescription('');
     setJobResponsibilities('');
   };
-
-  // Save to localStorage whenever these values change
-  useEffect(() => {
-    localStorage.setItem('resumeText', resumeText);
-    localStorage.setItem('fileName', fileName);
-    localStorage.setItem('jobTitle', jobTitle);
-    localStorage.setItem('jobCompany', jobCompany);
-    localStorage.setItem('jobDescription', jobDescription);
-    localStorage.setItem('jobResponsibilities', jobResponsibilities);
-  }, [resumeText, fileName, jobTitle, jobCompany, jobDescription, jobResponsibilities]);
 
   // Auto-scroll to the answer when generated
   useEffect(() => {
@@ -371,6 +369,23 @@ function App() {
     window.scrollTo({ top: answerRef.current?.offsetTop || 0, behavior: 'smooth' });
   };
 
+  // Auth Container for Login/Signup
+  const AuthContainer = () => (
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
+      {authMode === 'login' ? (
+        <Login onSwitchMode={() => setAuthMode('signup')} />
+      ) : (
+        <Signup onSwitchMode={() => setAuthMode('login')} />
+      )}
+    </div>
+  );
+
+  // Render Auth or Main App
+  if (!user) { // If no user session, show AuthContainer
+    return <AuthContainer />;
+  }
+
+  // Main App Content (Rendered when user IS logged in)
   return (
     <div className="min-h-screen bg-gray-100 text-gray-800 flex flex-col">
       {/* Header */}
@@ -380,11 +395,19 @@ function App() {
             <div className="flex items-center">
               <h1 className="text-xl font-bold text-primary-600">InterviewAce</h1>
             </div>
+            {user && (
+              <div>
+                <span className="text-sm text-gray-600 mr-4 hidden sm:inline">{user.email}</span>
+                <Button onClick={signOut} variant="secondary" size="sm">
+                  Logout
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </header>
 
-      {/* Main Content Area - Updated with Grid Layout */}
+      {/* Main Content Area - Renders only if user exists */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           

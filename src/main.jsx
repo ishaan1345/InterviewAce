@@ -1,8 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
-import { AuthProvider } from './context/AuthContext'
 import './index.css'
+import { AuthProvider } from './context/AuthContext.jsx'
 
 // Make React available globally to fix any reference errors
 window.React = React;

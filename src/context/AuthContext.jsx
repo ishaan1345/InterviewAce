@@ -1,61 +1,68 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useContext } from 'react';
+import { supabase } from '../supabaseClient'; // Use the new client utility
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
-
-export function AuthProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState(null);
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  function signup(email, password) {
-    // This would connect to your auth service
-    return new Promise((resolve, reject) => {
-      // Mock signup
-      localStorage.setItem('user', JSON.stringify({ email }));
-      setCurrentUser({ email });
-      resolve();
-    });
-  }
-
-  function login(email, password) {
-    // This would connect to your auth service
-    return new Promise((resolve, reject) => {
-      // Mock login
-      localStorage.setItem('user', JSON.stringify({ email }));
-      setCurrentUser({ email });
-      resolve();
-    });
-  }
-
-  function logout() {
-    // Mock logout
-    localStorage.removeItem('user');
-    setCurrentUser(null);
-    return Promise.resolve();
-  }
-
   useEffect(() => {
-    // Check if user is already logged in
-    const user = localStorage.getItem('user');
-    if (user) {
-      setCurrentUser(JSON.parse(user));
+    if (!supabase) {
+      console.error("Supabase client not available in AuthProvider.");
+      setLoading(false);
+      return; // Stop if supabase client failed to initialize
     }
-    setLoading(false);
+
+    // Check initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    }).catch(err => {
+      console.error("Error getting initial session:", err);
+      setLoading(false);
+    });
+
+    // Listen for auth changes
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false); // Ensure loading is set to false on change
+      }
+    );
+
+    // Cleanup listener on unmount
+    return () => {
+      authListener?.unsubscribe();
+    };
   }, []);
 
   const value = {
-    currentUser,
-    signup,
-    login,
-    logout
+    session,
+    user,
+    loading,
+    // Ensure supabase client exists before calling auth methods
+    signUp: (data) => supabase ? supabase.auth.signUp(data) : Promise.reject("Supabase not initialized"),
+    signIn: (data) => supabase ? supabase.auth.signInWithPassword(data) : Promise.reject("Supabase not initialized"),
+    signOut: () => supabase ? supabase.auth.signOut() : Promise.reject("Supabase not initialized"),
   };
 
+  // Don't render children until loading is complete
   return (
     <AuthContext.Provider value={value}>
       {!loading && children}
     </AuthContext.Provider>
   );
-}
+};
+
+// Custom hook to use the auth context
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
