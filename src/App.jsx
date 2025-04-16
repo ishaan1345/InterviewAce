@@ -71,6 +71,7 @@ function App() {
   const [currentJobInfoId, setCurrentJobInfoId] = useState(null);
   const [isJobInfoDirty, setIsJobInfoDirty] = useState(false);
   const [isSavingJobInfo, setIsSavingJobInfo] = useState(false);
+  const [answerHistory, setAnswerHistory] = useState([]);
 
   // Refs
   const fileInputRef = useRef(null);
@@ -83,10 +84,9 @@ function App() {
       if (user && supabase) {
         console.log(`User logged in (${user.id}). Fetching data...`);
         setIsDataLoading(true);
-        // Reset states before loading
         setResumeText(''); setResumeFile(null); setCurrentResumeId(null);
         setJobTitle(''); setJobCompany(''); setJobDescription(''); setJobResponsibilities(''); setCurrentJobInfoId(null); setIsJobInfoDirty(false);
-        setRecentAnswers([]);
+        setAnswerHistory([]); // Clear local history before loading
 
         try {
           // Fetch latest resume
@@ -135,12 +135,33 @@ function App() {
              setIsJobInfoDirty(false);
           }
 
-          // TODO: Fetch Answer History (similar logic)
+          // Fetch Answer History
+          console.log("Fetching answer history...");
+          const { data: historyData, error: historyError } = await supabase
+            .from('answer_history')
+            .select('id, question, answer, created_at') // Select desired columns
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(10); // Load last 10 history items
 
-        } catch (error) {
+          if (historyError) {
+            console.error(`Error fetching history: ${historyError.message}`);
+            // Don't throw, allow app to continue
+          } else if (historyData) {
+            console.log(`History found (${historyData.length} items), setting state.`);
+            // Map Supabase data to the format expected by HistoryItem component
+            const formattedHistory = historyData.map(item => ({
+                id: item.id,
+                question: item.question,
+                answer: item.answer,
+                timestamp: item.created_at // Use Supabase timestamp
+            }));
+            setAnswerHistory(formattedHistory);
+          }
+
+        } catch (error) { 
           console.error("Error loading user data:", error);
           alert(`Error loading your data: ${error.message}`);
-          // Optionally clear local state on error?
         } finally {
           setIsDataLoading(false);
           console.log("Data loading finished.");
@@ -154,6 +175,7 @@ function App() {
         // TODO: Clear Job Info state
         // TODO: Clear History state
         setIsDataLoading(false); // Ensure loading is false even if no user
+        setAnswerHistory([]); // Ensure history is cleared on logout
       }
     };
 
@@ -247,6 +269,33 @@ function App() {
       alert(`Failed to save job info: ${error.message}`); // Show error
     } finally {
       setIsSavingJobInfo(false);
+    }
+  };
+
+  // --- Save History Item to Supabase --- 
+  const saveHistoryToDb = async (historyItem) => {
+    if (!user || !supabase || !historyItem) return;
+    console.log("Saving history item to DB:", historyItem);
+    try {
+      const { error } = await supabase
+        .from('answer_history')
+        .insert({
+          user_id: user.id,
+          question: historyItem.question,
+          answer: historyItem.answer,
+          resume_id: historyItem.resumeId || null, // Pass optional IDs
+          job_info_id: historyItem.jobInfoId || null
+        });
+      
+      if (error) {
+         throw new Error(`Error saving history: ${error.message}`);
+      }
+      console.log("History item saved successfully.");
+
+    } catch(error) {
+       console.error("Error saving history item:", error);
+       // Optionally inform user, but maybe non-critical
+       // alert(`Could not save answer to history: ${error.message}`);
     }
   };
 
@@ -460,6 +509,23 @@ function App() {
       
       const updatedAnswers = [newAnswer, ...recentAnswers.slice(0, 9)];
       setRecentAnswers(updatedAnswers);
+
+      // Add to local state first for immediate UI update
+      const newHistoryItem = {
+        id: `temp-${Date.now()}`, // Temporary local ID
+        question,
+        answer: data.answer,
+        timestamp: new Date().toISOString(),
+        resumeId: currentResumeId, // Include current IDs
+        jobInfoId: currentJobInfoId 
+      };
+      setAnswerHistory(prev => [newHistoryItem, ...prev.slice(0, 9)]);
+      
+      // Save history item to DB asynchronously
+      if (user && supabase) { 
+         saveHistoryToDb(newHistoryItem); // Call the save function
+      }
+
     } catch (error) {
       console.error('Error generating answer:', error);
       alert('Error generating answer. Please try again.');
