@@ -26,6 +26,9 @@ import { useAuth } from './context/AuthContext'; // Correct path
 import Login from './Login.jsx';              // Import from src
 import Signup from './Signup.jsx';             // Import from src
 
+// Import Modal component
+import Modal from './components/common/Modal'; 
+
 // Fix the version mismatch - update worker to version 3.11.174 to match the API version
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
@@ -34,8 +37,10 @@ const apiUrl = '/api/generate-answer'; // Use relative path for deployment
 
 function App() {
   const { user, session, signOut } = useAuth(); // Use the auth hook
-  // Remove authMode state for now, will re-introduce if using modal
-  // const [authMode, setAuthMode] = useState('login'); 
+  
+  // State for Auth Modal
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState('login'); // 'login' or 'signup'
 
   // State variables
   const [resumeText, setResumeText] = useState(''); // Initialize empty, load later
@@ -355,10 +360,22 @@ function App() {
     window.scrollTo({ top: answerRef.current?.offsetTop || 0, behavior: 'smooth' });
   };
 
-  // --- Main App Rendering (Always render) --- 
-  // No more conditional rendering based on user
-  // if (!user) { return <AuthContainer />; }
+  // --- Handlers for opening the auth modal ---
+  const openLoginModal = () => {
+    setAuthModalMode('login');
+    setIsAuthModalOpen(true);
+  };
 
+  const openSignupModal = () => {
+    setAuthModalMode('signup');
+    setIsAuthModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsAuthModalOpen(false);
+  };
+
+  // --- Main App Rendering (Always render) --- 
   return (
     <div className="min-h-screen bg-gray-100 text-gray-800 flex flex-col">
       {/* Header */}
@@ -367,6 +384,7 @@ function App() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <h1 className="text-xl font-bold text-primary-600">InterviewAce</h1>
+              <span className="ml-2 text-sm text-gray-500 hidden md:inline">AI Interview Prep</span>
             </div>
             <div>
               {user ? (
@@ -378,17 +396,17 @@ function App() {
                   </Button>
                 </div>
               ) : (
-                // Logged-out state: Show Login and Signup buttons
+                // Logged-out state: Use modal triggers
                 <div className="flex items-center space-x-2">
                   <Button 
-                    onClick={() => alert('Login functionality to be added.')} 
+                    onClick={openLoginModal} 
                     variant="secondary" 
                     size="sm"
                   >
                     Login
                   </Button>
                   <Button 
-                    onClick={() => alert('Signup functionality to be added.')} 
+                    onClick={openSignupModal} 
                     variant="primary" 
                     size="sm"
                   >
@@ -668,6 +686,20 @@ function App() {
           </p>
         </div>
       </footer>
+
+      {/* Authentication Modal */}
+      <Modal 
+        isOpen={isAuthModalOpen} 
+        onClose={closeModal} 
+        title={authModalMode === 'login' ? 'Log In' : 'Sign Up'}
+      >
+        {authModalMode === 'login' ? (
+          <Login onSwitchMode={() => setAuthModalMode('signup')} />
+        ) : (
+          <Signup onSwitchMode={() => setAuthModalMode('login')} />
+        )}
+      </Modal>
+
     </div>
   );
 }
