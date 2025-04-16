@@ -11,6 +11,8 @@ import rateLimit from 'express-rate-limit';
 import { execSync } from 'child_process';
 // Import the Tailwind middleware
 import { tailwindMiddleware, generateInlineTailwind } from './tailwind-inline.js';
+import { Configuration, OpenAIApi } from 'openai';
+import { createDirectStylesMiddleware } from './direct-styles.js';
 
 dotenv.config();
 
@@ -37,6 +39,9 @@ if (!OPENAI_API_KEY) {
 // Initialize Express
 const app = express();
 let server = null;
+
+// Enable trust proxy - necessary for express-rate-limit to work with Heroku
+app.enable('trust proxy');
 
 // Improved port handling and cleanup
 const findAvailablePort = (startPort) => {
@@ -104,9 +109,10 @@ const releaseLock = () => {
 
 // Configure CORS
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173', process.env.FRONTEND_URL || ''],
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://interviewace.herokuapp.com', 'https://www.interviewace.com'] 
+    : 'http://localhost:5173',
   methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
 
@@ -114,9 +120,10 @@ app.use(cors({
 app.use(bodyParser.json({ limit: '10mb' }));
 
 // Configure OpenAI client with API key from environment
-const openai = new OpenAI({
+const configuration = new Configuration({
   apiKey: OPENAI_API_KEY
 });
+const openai = new OpenAIApi(configuration);
 
 // Simple in-memory cache with TTL
 const cache = new Map();
@@ -239,88 +246,35 @@ ${jobInfoText ? `The candidate is applying for:${jobInfoText}` : ''}`;
   }
 });
 
-// Serve static files in production
-if (IS_PRODUCTION) {
-  // FIXED: The correct build path is dist in the root, not src/dist
-  const buildPath = path.join(__dirname, 'dist');
-  console.log(`Serving static files from: ${buildPath}`);
-  
-  // Inject direct styles to ensure styles work regardless of CSS loading issues
-  import('./direct-styles.js')
-    .then(module => {
-      const { createDirectStylesMiddleware } = module;
-      console.log('Using direct styles middleware');
-      app.use(createDirectStylesMiddleware());
-    })
-    .catch(err => {
-      console.warn('Could not load direct styles middleware:', err.message);
-    });
-  
-  // Cache static assets for improved performance
-  const staticOptions = {
-    etag: true,
-    lastModified: true,
-    setHeaders: (res, filePath) => {
-      // Set cache headers for different file types
-      const maxAge = 31536000; // 1 year for static assets
-      
-      // Set appropriate MIME types to ensure browser renders correctly
-      if (filePath.endsWith('.css')) {
-        res.setHeader('Content-Type', 'text/css');
-        res.setHeader('Cache-Control', `public, max-age=${maxAge}`);
-      } else if (filePath.endsWith('.js')) {
-        res.setHeader('Content-Type', 'application/javascript');
-        res.setHeader('Cache-Control', `public, max-age=${maxAge}`);
-      } else if (filePath.endsWith('.json')) {
-        res.setHeader('Content-Type', 'application/json');
-      } else if (filePath.endsWith('.svg')) {
-        res.setHeader('Content-Type', 'image/svg+xml');
-      } else if (filePath.endsWith('.png')) {
-        res.setHeader('Content-Type', 'image/png');
-      } else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
-        res.setHeader('Content-Type', 'image/jpeg');
-      } else if (filePath.endsWith('.woff2')) {
-        res.setHeader('Content-Type', 'font/woff2');
-      } else if (filePath.endsWith('.woff')) {
-        res.setHeader('Content-Type', 'font/woff');
-      }
+// Build path for static files
+const buildPath = path.join(__dirname, 'dist');
+
+// Debug middleware to help diagnose static file serving issues
+app.use((req, res, next) => {
+  // Log all requests except for static assets to reduce noise
+  if (!req.path.includes('.')) {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  }
+  next();
+});
+
+// Apply direct styles middleware
+app.use(createDirectStylesMiddleware());
+
+// Serve static files with proper cache headers
+app.use(express.static(buildPath, {
+  maxAge: '1y',
+  etag: true,
+  index: false, // Don't automatically serve index.html
+  setHeaders: (res, filePath) => {
+    // Set no-cache for HTML files
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
     }
-  };
-  
-  // Add a debug middleware to log asset requests
-  app.use((req, res, next) => {
-    if (!req.path.startsWith('/api') && !req.path.includes('.')) {
-      console.log(`Page request: ${req.path}`);
-    } else if (!req.path.startsWith('/api') && req.path.includes('.')) {
-      console.log(`Asset request: ${req.path}`);
-    }
-    next();
-  });
-  
-  // Try to import Tailwind middleware if available
-  import('./tailwind-inline.js')
-    .then(module => {
-      const { tailwindMiddleware, generateInlineTailwind } = module;
-      // Generate fallback Tailwind CSS
-      generateInlineTailwind().catch(err => console.warn('Error generating fallback styles:', err.message));
-      // Use the middleware
-      app.use(tailwindMiddleware(buildPath));
-      console.log('Tailwind middleware enabled');
-    })
-    .catch(err => {
-      console.warn('Tailwind middleware not available:', err.message);
-    });
-  
-  // Serve static files with explicit MIME types
-  app.use(express.static(buildPath, staticOptions));
-  
-  // For any route not matching an API route, serve the index.html
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api')) {
-      res.sendFile(path.join(buildPath, 'index.html'));
-    }
-  });
-}
+  }
+}));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -416,71 +370,12 @@ const startServer = async () => {
       console.error(`Server encountered an error on port ${actualPort}:`, err.message);
       if (err.code === 'EADDRINUSE') {
         console.error(`Port ${actualPort} is already in use. Cannot start server.`);
-      } else {
-        console.error('An unexpected server error occurred.');
       }
-      releaseLock(); // Ensure lock is released on server error
-      process.exit(1); // Exit if server cannot start
     });
-
-  } catch (err) {
-    // This catch block handles errors from findAvailablePort
-    console.error('Fatal error during server startup:', err.message);
-    releaseLock();
+  } catch (error) {
+    console.error('Error starting server:', error);
     process.exit(1);
   }
 };
 
-// Handle graceful shutdown
-const gracefulShutdown = () => {
-  console.log('Received shutdown signal, closing server gracefully...');
-  server.close(() => {
-    console.log('Server closed successfully');
-    
-    // Clean up lock file
-    if (!IS_PRODUCTION && fs.existsSync(SERVER_LOCK_FILE)) {
-      try {
-        fs.unlinkSync(SERVER_LOCK_FILE);
-        console.log('Removed server lock file');
-      } catch (error) {
-        console.warn(`Warning: Could not remove lock file: ${error.message}`);
-      }
-    }
-    
-    process.exit(0);
-  });
-  
-  // Force close after 10 seconds if hanging
-  setTimeout(() => {
-    console.error('Could not close connections in time, forcefully shutting down');
-    process.exit(1);
-  }, 10000);
-};
-
-// Listen for shutdown signals
-process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
-
-// Handle nodemon restart signal
-process.on('SIGUSR2', () => {
-  console.log('Nodemon restart signal received');
-  if (server) {
-    server.close(() => {
-      console.log('Server closed for nodemon restart');
-      releaseLock();
-      process.kill(process.pid, 'SIGUSR2');
-    });
-  } else {
-    releaseLock();
-    process.kill(process.pid, 'SIGUSR2');
-  }
-});
-
-// Handle uncaught exceptions
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-  gracefulShutdown();
-});
-
-// Start the server
-startServer(); 
+startServer();
