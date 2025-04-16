@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   ArrowPathIcon,
   XMarkIcon,
@@ -29,6 +29,9 @@ import Signup from './Signup.jsx';             // Import from src
 // Import Modal component
 import Modal from './components/common/Modal'; 
 
+// Import Supabase client
+import { supabase } from './supabaseClient'; // Import Supabase client
+
 // Fix the version mismatch - update worker to version 3.11.174 to match the API version
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
@@ -43,7 +46,12 @@ function App() {
   const [authModalMode, setAuthModalMode] = useState('login'); // 'login' or 'signup'
 
   // State variables
-  const [resumeText, setResumeText] = useState(''); // Initialize empty, load later
+  const [resumeText, setResumeText] = useState(''); // Initialize empty
+  const [resumeFile, setResumeFile] = useState(null);
+  const [isLoadingResume, setIsLoadingResume] = useState(false);
+  const [resumeError, setResumeError] = useState('');
+  const [isDataLoading, setIsDataLoading] = useState(true); // New state for initial data load
+  const [currentResumeId, setCurrentResumeId] = useState(null); // To link history
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -66,18 +74,139 @@ function App() {
   const recognitionRef = useRef(null);
   const answerRef = useRef(null);
 
-  // --- Load/Save Data Logic (Placeholder for DB interaction) ---
-  // We removed localStorage persistence. Data is now in-memory per session.
-  // Will add Supabase loading/saving based on 'user' state later.
+  // --- Load User Data from Supabase --- 
   useEffect(() => {
-    // Placeholder: If we were loading data for a logged-in user, we'd do it here.
-    // Example: if (user) { loadDataFromSupabase(user.id); }
-    // For now, data resets on refresh.
-    console.log("Current user:", user);
-    // Clear potentially stale data if user logs out or logs in
-    // You might want more sophisticated state management later
-    // clearAllAppData(); // Example function call
-  }, [user]);
+    const loadUserData = async () => {
+      if (user && supabase) {
+        console.log(`User logged in (${user.id}). Fetching data...`);
+        setIsDataLoading(true);
+        try {
+          // Fetch latest resume
+          const { data: resumeData, error: resumeError } = await supabase
+            .from('resumes')
+            .select('id, resume_text, file_name')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single(); // Fetch only one record or null
+
+          if (resumeError && resumeError.code !== 'PGRST116') { // Ignore error if no rows found
+            throw new Error(`Error fetching resume: ${resumeError.message}`);
+          }
+          if (resumeData) {
+            console.log("Resume found, setting state.");
+            setResumeText(resumeData.resume_text || '');
+            setResumeFile(resumeData.file_name ? { name: resumeData.file_name } : null);
+            setCurrentResumeId(resumeData.id);
+          } else {
+            console.log("No resume found for user.");
+            // Clear local state if no resume in DB
+            setResumeText('');
+            setResumeFile(null);
+            setCurrentResumeId(null);
+          }
+
+          // TODO: Fetch latest Job Info (similar logic)
+
+          // TODO: Fetch Answer History (similar logic)
+
+        } catch (error) {
+          console.error("Error loading user data:", error);
+          alert(`Error loading your data: ${error.message}`);
+          // Optionally clear local state on error?
+        } finally {
+          setIsDataLoading(false);
+          console.log("Data loading finished.");
+        }
+      } else {
+        // User logged out or Supabase not ready
+        console.log("User logged out or Supabase not ready. Clearing data.");
+        setResumeText('');
+        setResumeFile(null);
+        setCurrentResumeId(null);
+        // TODO: Clear Job Info state
+        // TODO: Clear History state
+        setIsDataLoading(false); // Ensure loading is false even if no user
+      }
+    };
+
+    loadUserData();
+
+  }, [user]); // Re-run when user logs in/out
+
+  // --- Save Resume to Supabase ---
+  const saveResumeToDb = async (textToSave, fileName) => {
+    if (!user || !supabase || !textToSave) return; // Need user, supabase, and text
+
+    console.log(`Saving resume for user ${user.id}...`);
+    try {
+      const { data, error } = await supabase
+        .from('resumes')
+        .upsert({
+          user_id: user.id,
+          resume_text: textToSave,
+          file_name: fileName || null,
+          // If upserting based on user_id, Supabase needs a unique constraint
+          // or primary key involving user_id for upsert to work reliably 
+          // without specifying an id. Let's assume we replace any existing.
+          // For simplicity now, we insert a new one each time and load the latest.
+          // A better approach might be upsert on (user_id) if only one resume per user.
+          // OR, we could fetch first, then update if exists, insert if not.
+          // Let's stick to INSERT for now and fetch latest in useEffect.
+        })
+        // Switching to explicit insert and storing the ID
+        .insert({
+          user_id: user.id,
+          resume_text: textToSave,
+          file_name: fileName || null,
+        })
+        .select('id') // Select the id of the inserted row
+        .single(); // Expecting a single row back
+
+      if (error) {
+        throw new Error(`Error saving resume: ${error.message}`);
+      }
+      
+      if (data) {
+        console.log("Resume saved successfully. New resume ID:", data.id);
+        setCurrentResumeId(data.id); // Update the current resume ID state
+      } else {
+        console.warn("Resume saved but no ID returned?");
+      }
+
+    } catch (error) {
+      console.error("Error saving resume to DB:", error);
+      setResumeError(`Failed to save resume: ${error.message}`); // Show error to user
+    }
+  };
+
+  // Handle resume file drop
+  const onDrop = useCallback(async (acceptedFiles) => {
+    const file = acceptedFiles[0];
+    if (!file) return;
+
+    setResumeError('');
+    setIsLoadingResume(true);
+    setResumeFile(file);
+    setResumeText(''); // Clear previous text
+    setCurrentResumeId(null); // Reset current ID on new upload
+
+    try {
+      const text = await extractText(file); // Use existing extractText function
+      setResumeText(text);
+      // --> Save to DB after extracting text
+      if (user) {
+        await saveResumeToDb(text, file.name); 
+      }
+      // <---
+    } catch (error) {
+      console.error("Error during resume processing:", error);
+      setResumeError(error.toString());
+      setResumeFile(null); // Clear file on error
+    } finally {
+      setIsLoadingResume(false);
+    }
+  }, [user]); // Add user dependency to onDrop
 
   const handleFileChange = async (event) => {
     const file = event.target.files[0];
@@ -376,6 +505,14 @@ function App() {
   };
 
   // --- Main App Rendering (Always render) --- 
+  if (isDataLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <ArrowPathIcon className="h-8 w-8 animate-spin text-primary-600" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 text-gray-800 flex flex-col">
       {/* Header */}
