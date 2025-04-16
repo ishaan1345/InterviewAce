@@ -67,7 +67,10 @@ function App() {
   const [copied, setCopied] = useState(false);
   const [showTips, setShowTips] = useState(false);
   const [manualInputMode, setManualInputMode] = useState(false);
-  const [isJobInfoVisible, setIsJobInfoVisible] = useState(true);
+  const [isJobInfoVisible, setIsJobInfoVisible] = useState(false);
+  const [currentJobInfoId, setCurrentJobInfoId] = useState(null);
+  const [isJobInfoDirty, setIsJobInfoDirty] = useState(false);
+  const [isSavingJobInfo, setIsSavingJobInfo] = useState(false);
 
   // Refs
   const fileInputRef = useRef(null);
@@ -80,6 +83,11 @@ function App() {
       if (user && supabase) {
         console.log(`User logged in (${user.id}). Fetching data...`);
         setIsDataLoading(true);
+        // Reset states before loading
+        setResumeText(''); setResumeFile(null); setCurrentResumeId(null);
+        setJobTitle(''); setJobCompany(''); setJobDescription(''); setJobResponsibilities(''); setCurrentJobInfoId(null); setIsJobInfoDirty(false);
+        setRecentAnswers([]);
+
         try {
           // Fetch latest resume
           const { data: resumeData, error: resumeError } = await supabase
@@ -91,7 +99,7 @@ function App() {
             .single(); // Fetch only one record or null
 
           if (resumeError && resumeError.code !== 'PGRST116') { // Ignore error if no rows found
-            throw new Error(`Error fetching resume: ${resumeError.message}`);
+            console.error(`Error fetching resume: ${resumeError.message}`);
           }
           if (resumeData) {
             console.log("Resume found, setting state.");
@@ -106,7 +114,26 @@ function App() {
             setCurrentResumeId(null);
           }
 
-          // TODO: Fetch latest Job Info (similar logic)
+          // Fetch latest Job Info
+          const { data: jobData, error: jobError } = await supabase
+            .from('job_info')
+            .select('id, job_title, job_company, job_description, job_responsibilities')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (jobError && jobError.code !== 'PGRST116') { 
+             console.error(`Error fetching job info: ${jobError.message}`);
+          } else if (jobData) {
+             console.log("Job info found, setting state.");
+             setJobTitle(jobData.job_title || '');
+             setJobCompany(jobData.job_company || '');
+             setJobDescription(jobData.job_description || '');
+             setJobResponsibilities(jobData.job_responsibilities || '');
+             setCurrentJobInfoId(jobData.id);
+             setIsJobInfoDirty(false);
+          }
 
           // TODO: Fetch Answer History (similar logic)
 
@@ -177,6 +204,49 @@ function App() {
     } catch (error) {
       console.error("Error saving resume to DB:", error);
       setResumeError(`Failed to save resume: ${error.message}`); // Show error to user
+    }
+  };
+
+  // --- Save Job Info to Supabase ---
+  const saveJobInfoToDb = async () => {
+    if (!user || !supabase || !isJobInfoDirty) return; // Only save if logged in and changed
+    
+    setIsSavingJobInfo(true);
+    console.log(`Saving job info for user ${user.id}...`);
+    try {
+      const jobDataToSave = {
+        user_id: user.id,
+        job_title: jobTitle,
+        job_company: jobCompany,
+        job_description: jobDescription,
+        job_responsibilities: jobResponsibilities,
+      };
+
+      // We will INSERT a new record each time, similar to resume for simplicity
+      // The useEffect load logic fetches the latest one.
+      const { data, error } = await supabase
+        .from('job_info')
+        .insert(jobDataToSave)
+        .select('id')
+        .single();
+
+      if (error) {
+        throw new Error(`Error saving job info: ${error.message}`);
+      }
+
+      if (data) {
+        console.log("Job info saved successfully. New job info ID:", data.id);
+        setCurrentJobInfoId(data.id); // Update current ID
+        setIsJobInfoDirty(false); // Reset dirty flag
+      } else {
+         console.warn("Job info saved but no ID returned?");
+      }
+
+    } catch (error) {
+      console.error("Error saving job info to DB:", error);
+      alert(`Failed to save job info: ${error.message}`); // Show error
+    } finally {
+      setIsSavingJobInfo(false);
     }
   };
 
@@ -504,6 +574,12 @@ function App() {
     setIsAuthModalOpen(false);
   };
 
+  // --- Update Input Handlers to set dirty flag ---
+  const handleJobTitleChange = (e) => { setJobTitle(e.target.value); setIsJobInfoDirty(true); };
+  const handleJobCompanyChange = (e) => { setJobCompany(e.target.value); setIsJobInfoDirty(true); };
+  const handleJobDescriptionChange = (e) => { setJobDescription(e.target.value); setIsJobInfoDirty(true); };
+  const handleJobResponsibilitiesChange = (e) => { setJobResponsibilities(e.target.value); setIsJobInfoDirty(true); };
+
   // --- Main App Rendering (Always render) --- 
   if (isDataLoading) {
     return (
@@ -656,40 +732,47 @@ function App() {
 
               {/* Collapsible Content */}
               {isJobInfoVisible && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-4 pt-4 border-t border-gray-100">
                   <InputGroup
-                    id="jobTitle"
                     label="Job Title"
+                    id="jobTitle"
                     value={jobTitle}
-                    onChange={(e) => setJobTitle(e.target.value)}
+                    onChange={handleJobTitleChange}
                     placeholder="e.g. Frontend Developer"
                   />
                   <InputGroup
-                    id="jobCompany"
                     label="Company"
+                    id="jobCompany"
                     value={jobCompany}
-                    onChange={(e) => setJobCompany(e.target.value)}
+                    onChange={handleJobCompanyChange}
                     placeholder="e.g. Tech Solutions Inc."
                   />
-                  <div className="sm:col-span-2">
-                    <TextAreaGroup
-                      id="jobDescription"
-                      label="Job Description"
-                      value={jobDescription}
-                      onChange={(e) => setJobDescription(e.target.value)}
-                      placeholder="Copy and paste the job description here..."
-                      rows={5}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <TextAreaGroup
-                      id="jobResponsibilities"
-                      label="Key Responsibilities"
-                      value={jobResponsibilities}
-                      onChange={(e) => setJobResponsibilities(e.target.value)}
-                      placeholder="List the key responsibilities from the job description..."
-                      rows={5}
-                    />
+                  <TextAreaGroup
+                    label="Job Description"
+                    id="jobDescription"
+                    value={jobDescription}
+                    onChange={handleJobDescriptionChange}
+                    placeholder="Copy and paste the job description here..."
+                    rows={4}
+                  />
+                  <TextAreaGroup
+                    label="Key Responsibilities"
+                    id="jobResponsibilities"
+                    value={jobResponsibilities}
+                    onChange={handleJobResponsibilitiesChange}
+                    placeholder="List the key responsibilities from the job description..."
+                    rows={3}
+                  />
+                  {/* Save Button */}
+                  <div className="flex justify-end pt-2">
+                    <Button
+                      onClick={saveJobInfoToDb}
+                      disabled={!isJobInfoDirty || isSavingJobInfo}
+                      loading={isSavingJobInfo}
+                      size="sm"
+                    >
+                      {isSavingJobInfo ? 'Saving...' : (isJobInfoDirty ? 'Save Job Info' : 'Job Info Saved')}
+                    </Button>
                   </div>
                 </div>
               )}
