@@ -38,8 +38,22 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 // API URL Configuration
 const apiUrl = '/api/generate-answer'; // Use relative path for deployment
 
+// Placeholder for the new feature component
+const LiveInterviewMode = ({ onEndSession }) => {
+  // TODO: Build out the live interview UI and logic here
+  return (
+    <Card title="Live Interview Mode (Premium Feature)">
+      <p className="text-gray-600 mb-4">This feature will provide real-time transcription and context-aware AI answers.</p>
+      <p className="text-sm mb-4">[Live transcript will appear here]</p>
+      <p className="text-sm mb-4">[Current AI response will appear here]</p>
+      <p className="text-sm mb-4">[Conversation history might appear here]</p>
+      <Button onClick={onEndSession} variant="danger">End Live Session</Button>
+    </Card>
+  );
+};
+
 function App() {
-  const { user, session, signOut } = useAuth(); // Use the auth hook
+  const { user, session, signOut, profile, isSubscribed } = useAuth(); // Get profile and subscription status
   
   // State for Auth Modal
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -72,6 +86,9 @@ function App() {
   const [isJobInfoDirty, setIsJobInfoDirty] = useState(false);
   const [isSavingJobInfo, setIsSavingJobInfo] = useState(false);
   const [answerHistory, setAnswerHistory] = useState([]);
+
+  // State for Live Interview Mode
+  const [isLiveModeActive, setIsLiveModeActive] = useState(false);
 
   // Refs
   const fileInputRef = useRef(null);
@@ -700,269 +717,290 @@ function App() {
 
       {/* Main Content Area - Always Renders */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-          
-          {/* Left Column (Main Flow) - Takes 2/3 width on large screens */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Step 1 (Now): Question & Answer */} 
-            <Card title="1. Ask an Interview Question">
-              <div className="flex justify-end mb-2">
+        {/* Toggle Button for Live Mode */} 
+        {user && (
+            <div className="mb-6 text-center">
                 <Button 
-                  variant="text" 
-                  className="text-xs px-2 py-1 h-auto flex items-center gap-1"
-                  onClick={() => setShowTips(!showTips)}
+                    onClick={() => setIsLiveModeActive(!isLiveModeActive)}
+                    variant={isLiveModeActive ? "secondary" : "primary"} 
+                    disabled={!isSubscribed} // Disable if not subscribed
+                    title={!isSubscribed ? "Upgrade to Premium for Live Mode" : (isLiveModeActive ? "Switch to Basic Mode" : "Start Live Interview")}
                 >
-                  <InformationCircleIcon className="h-4 w-4" />
-                  {showTips ? 'Hide Tips' : 'Show Tips'}
+                    {isLiveModeActive ? "Exit Live Mode" : "Start Live Interview"}
+                    {!isLiveModeActive && <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-400 text-yellow-900">🔥 Premium</span>}
                 </Button>
-              </div>
-              
-              {showTips && (
-                <div className="bg-primary-50 rounded-md p-4 mb-4 text-sm text-primary-800 border border-primary-200">
-                  <h3 className="font-medium mb-2 text-primary-900">Tips for better answers:</h3>
-                  <ul className="list-disc pl-5 space-y-1 text-primary-700">
-                    <li>Ask specific questions about your experiences and skills.</li>
-                    <li>Include the job title in your question for more targeted responses.</li>
-                    <li>Try questions like "Tell me about a time when..." or "How would you handle..."</li>
-                    <li>Use voice input for a more natural conversation flow.</li>
-                  </ul>
-                </div>
-              )}
-              
-              <div className="relative mb-4">
-                <TextAreaGroup
-                  id="interviewQuestion"
-                  label="Interview Question"
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  placeholder="Type your question here or use the microphone..."
-                  rows={3}
-                  required
-                />
-                <div className="absolute right-2 bottom-2 flex space-x-1">
-                  {question && (
-                    <Button
-                      variant="secondary"
-                      onClick={clearQuestion}
-                      className="p-1.5 h-auto w-auto rounded-full bg-gray-100 text-gray-400 hover:text-gray-600 hover:bg-gray-200"
-                      title="Clear question"
-                    >
-                      <XMarkIcon className="h-4 w-4" />
-                    </Button>
-                  )}
-                  <Button
-                    variant={isListening ? "danger" : "secondary"}
-                    onClick={toggleListening}
-                    className={`p-1.5 h-auto w-auto rounded-full ${isListening ? '' : 'bg-gray-100 text-gray-500 hover:text-gray-700 hover:bg-gray-200'}`}
-                    title={isListening ? 'Stop listening' : 'Start voice input'}
+                 {!isSubscribed && <p className="text-xs text-gray-500 mt-1">Premium Feature</p>}
+            </div>
+        )}
+
+        {isLiveModeActive && isSubscribed ? (
+          // --- Render Live Interview Mode --- 
+          <LiveInterviewMode onEndSession={() => setIsLiveModeActive(false)} />
+        ) : (
+          // --- Render Basic Mode (Existing Layout) --- 
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+            {/* Left Column (Main Flow) - Takes 2/3 width on large screens */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Step 1 (Now): Question & Answer */} 
+              <Card title="1. Ask an Interview Question">
+                <div className="flex justify-end mb-2">
+                  <Button 
+                    variant="text" 
+                    className="text-xs px-2 py-1 h-auto flex items-center gap-1"
+                    onClick={() => setShowTips(!showTips)}
                   >
-                    <MicrophoneIcon className="h-4 w-4" />
+                    <InformationCircleIcon className="h-4 w-4" />
+                    {showTips ? 'Hide Tips' : 'Show Tips'}
                   </Button>
                 </div>
                 
-                {isListening && (
-                  <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center pointer-events-none">
-                    <span className="relative flex h-4 w-4 mt-4 mr-4">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500"></span>
-                    </span>
+                {showTips && (
+                  <div className="bg-primary-50 rounded-md p-4 mb-4 text-sm text-primary-800 border border-primary-200">
+                    <h3 className="font-medium mb-2 text-primary-900">Tips for better answers:</h3>
+                    <ul className="list-disc pl-5 space-y-1 text-primary-700">
+                      <li>Ask specific questions about your experiences and skills.</li>
+                      <li>Include the job title in your question for more targeted responses.</li>
+                      <li>Try questions like "Tell me about a time when..." or "How would you handle..."</li>
+                      <li>Use voice input for a more natural conversation flow.</li>
+                    </ul>
                   </div>
                 )}
-              </div>
-              
-              <Button
-                type="button"
-                onClick={generateAnswer}
-                disabled={isLoading || !question || !resumeText}
-                isLoading={isLoading}
-                className="w-full"
-                icon={PaperAirplaneIcon}
-              >
-                {isLoading ? 'Generating...' : 'Generate Interview Answer'}
-              </Button>
-              
-              {!resumeText && (
-                <p className="text-xs text-red-500 mt-2 text-center">Please provide resume text below to enable answer generation.</p>
-              )}
-            </Card>
-
-            {/* Answer Section (conditionally rendered) */}
-            {answer && (
-              <div ref={answerRef}>
-                <AnswerDisplay
-                  answer={answer}
-                  jobTitle={jobTitle}
-                  jobCompany={jobCompany}
-                  onAskAnother={clearQuestion}
-                />
-              </div>
-            )}
-
-            {/* Step 2 & 3 (Now): Resume & Job Info Side-by-Side */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Resume Card */}
-                <Card title="2. Your Resume">
-                  <UploadDropzone
-                    resumeText={resumeText}
-                    fileName={fileName}
-                    uploadProgress={uploadProgress}
-                    onFileChange={handleFileChange}
-                    onClearResume={() => { setResumeText(''); setFileName(''); }}
+                
+                <div className="relative mb-4">
+                  <TextAreaGroup
+                    id="interviewQuestion"
+                    label="Interview Question"
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    placeholder="Type your question here or use the microphone..."
+                    rows={3}
+                    required
                   />
-
-                  {/* Manual Input Section */} 
-                  {!resumeText && (
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                      <Button 
-                        variant="text"
-                        onClick={() => setManualInputMode(!manualInputMode)}
-                        className="text-xs px-0 py-1 h-auto"
+                  <div className="absolute right-2 bottom-2 flex space-x-1">
+                    {question && (
+                      <Button
+                        variant="secondary"
+                        onClick={clearQuestion}
+                        className="p-1.5 h-auto w-auto rounded-full bg-gray-100 text-gray-400 hover:text-gray-600 hover:bg-gray-200"
+                        title="Clear question"
                       >
-                        {manualInputMode ? "Hide manual input" : "Or paste resume text manually"}
+                        <XMarkIcon className="h-4 w-4" />
                       </Button>
-                      
-                      {manualInputMode && (
-                        <div className="mt-3">
-                          <TextAreaGroup 
-                            id="manualResume"
-                            label="Paste Resume Text"
-                            value={resumeText} // Bind to resumeText state
-                            onChange={(e) => setResumeText(e.target.value)}
-                            placeholder="Copy and paste your resume text here..."
-                            rows={10}
-                            required
-                          />
-                          {resumeText && (
-                            <Button 
-                              variant="secondary" 
-                              onClick={() => {
-                                setManualInputMode(false);
-                                setFileName('Manual entry');
-                              }}
-                              className="mt-3 text-xs"
-                              icon={CheckIcon}
-                            >
-                              Use Pasted Text
-                            </Button>
-                          )}
-                        </div>
-                      )}
+                    )}
+                    <Button
+                      variant={isListening ? "danger" : "secondary"}
+                      onClick={toggleListening}
+                      className={`p-1.5 h-auto w-auto rounded-full ${isListening ? '' : 'bg-gray-100 text-gray-500 hover:text-gray-700 hover:bg-gray-200'}`}
+                      title={isListening ? 'Stop listening' : 'Start voice input'}
+                    >
+                      <MicrophoneIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  
+                  {isListening && (
+                    <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center pointer-events-none">
+                      <span className="relative flex h-4 w-4 mt-4 mr-4">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500"></span>
+                      </span>
                     </div>
                   )}
+                </div>
+                
+                <Button
+                  type="button"
+                  onClick={generateAnswer}
+                  disabled={isLoading || !question || !resumeText}
+                  isLoading={isLoading}
+                  className="w-full"
+                  icon={PaperAirplaneIcon}
+                >
+                  {isLoading ? 'Generating...' : 'Generate Interview Answer'}
+                </Button>
+                
+                {!resumeText && (
+                  <p className="text-xs text-red-500 mt-2 text-center">Please provide resume text below to enable answer generation.</p>
+                )}
+              </Card>
 
-                  {/* Resume Preview & Clear Buttons */}
-                  {resumeText && (
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                      <h3 className="text-sm font-medium text-gray-700 mb-2">Resume Preview</h3>
-                      <div className="bg-gray-50 rounded border border-gray-200 p-3 max-h-40 overflow-y-auto text-xs text-gray-600 whitespace-pre-line mb-3">
-                        {resumeText.substring(0, 500)}{resumeText.length > 500 ? '...' : ''}
-                      </div>
-                      <div className="flex space-x-2">
+              {/* Answer Section (conditionally rendered) */}
+              {answer && (
+                <div ref={answerRef}>
+                  <AnswerDisplay
+                    answer={answer}
+                    jobTitle={jobTitle}
+                    jobCompany={jobCompany}
+                    onAskAnother={clearQuestion}
+                  />
+                </div>
+              )}
+
+              {/* Step 2 & 3 (Now): Resume & Job Info Side-by-Side */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Resume Card */}
+                  <Card title="2. Your Resume">
+                    <UploadDropzone
+                      resumeText={resumeText}
+                      fileName={fileName}
+                      uploadProgress={uploadProgress}
+                      onFileChange={handleFileChange}
+                      onClearResume={() => { setResumeText(''); setFileName(''); }}
+                    />
+
+                    {/* Manual Input Section */} 
+                    {!resumeText && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
                         <Button 
-                          variant="danger"
-                          onClick={() => { setResumeText(''); setFileName(''); }}
-                          className="text-xs"
+                          variant="text"
+                          onClick={() => setManualInputMode(!manualInputMode)}
+                          className="text-xs px-0 py-1 h-auto"
                         >
-                          Clear Resume & Job Data
+                          {manualInputMode ? "Hide manual input" : "Or paste resume text manually"}
                         </Button>
-                      </div>
-                    </div>
-                  )}
-                </Card>
-
-                {/* Job Info Card */}
-                <Card title="3. Job Information (Optional)">
-                  <div className="flex justify-between items-center mb-4">
-                      <p className="text-sm text-gray-500">
-                        Add details about the job to tailor answers more accurately.
-                      </p>
-                      <Button 
-                        variant="text"
-                        onClick={() => setIsJobInfoVisible(!isJobInfoVisible)}
-                        className="text-xs px-2 py-1 h-auto flex items-center gap-1 text-gray-500 hover:text-gray-700"
-                      >
-                        {isJobInfoVisible ? (
-                          <ChevronUpIcon className="h-4 w-4" />
-                        ) : (
-                          <ChevronDownIcon className="h-4 w-4" />
+                        
+                        {manualInputMode && (
+                          <div className="mt-3">
+                            <TextAreaGroup 
+                              id="manualResume"
+                              label="Paste Resume Text"
+                              value={resumeText} // Bind to resumeText state
+                              onChange={(e) => setResumeText(e.target.value)}
+                              placeholder="Copy and paste your resume text here..."
+                              rows={10}
+                              required
+                            />
+                            {resumeText && (
+                              <Button 
+                                variant="secondary" 
+                                onClick={() => {
+                                  setManualInputMode(false);
+                                  setFileName('Manual entry');
+                                }}
+                                className="mt-3 text-xs"
+                                icon={CheckIcon}
+                              >
+                                Use Pasted Text
+                              </Button>
+                            )}
+                          </div>
                         )}
-                        {isJobInfoVisible ? 'Collapse' : 'Expand'}
-                      </Button>
-                    </div>
+                      </div>
+                    )}
 
-                  {/* Collapsible Content */}
-                  {isJobInfoVisible && (
-                    <div className="space-y-4 pt-4 border-t border-gray-100">
-                      <InputGroup
-                        label="Job Title"
-                        id="jobTitle"
-                        value={jobTitle}
-                        onChange={handleJobTitleChange}
-                        placeholder="e.g. Frontend Developer"
-                      />
-                      <InputGroup
-                        label="Company"
-                        id="jobCompany"
-                        value={jobCompany}
-                        onChange={handleJobCompanyChange}
-                        placeholder="e.g. Tech Solutions Inc."
-                      />
-                      <TextAreaGroup
-                        label="Job Description"
-                        id="jobDescription"
-                        value={jobDescription}
-                        onChange={handleJobDescriptionChange}
-                        placeholder="Copy and paste the job description here..."
-                        rows={4}
-                      />
-                      <TextAreaGroup
-                        label="Key Responsibilities"
-                        id="jobResponsibilities"
-                        value={jobResponsibilities}
-                        onChange={handleJobResponsibilitiesChange}
-                        placeholder="List the key responsibilities from the job description..."
-                        rows={3}
-                      />
-                      {/* Save Button */}
-                      <div className="flex justify-end pt-2">
-                        <Button
-                          onClick={saveJobInfoToDb}
-                          disabled={!isJobInfoDirty || isSavingJobInfo}
-                          loading={isSavingJobInfo}
-                          size="sm"
+                    {/* Resume Preview & Clear Buttons */}
+                    {resumeText && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <h3 className="text-sm font-medium text-gray-700 mb-2">Resume Preview</h3>
+                        <div className="bg-gray-50 rounded border border-gray-200 p-3 max-h-40 overflow-y-auto text-xs text-gray-600 whitespace-pre-line mb-3">
+                          {resumeText.substring(0, 500)}{resumeText.length > 500 ? '...' : ''}
+                        </div>
+                        <div className="flex space-x-2">
+                          <Button 
+                            variant="danger"
+                            onClick={() => { setResumeText(''); setFileName(''); }}
+                            className="text-xs"
+                          >
+                            Clear Resume & Job Data
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+
+                  {/* Job Info Card */}
+                  <Card title="3. Job Information (Optional)">
+                    <div className="flex justify-between items-center mb-4">
+                        <p className="text-sm text-gray-500">
+                          Add details about the job to tailor answers more accurately.
+                        </p>
+                        <Button 
+                          variant="text"
+                          onClick={() => setIsJobInfoVisible(!isJobInfoVisible)}
+                          className="text-xs px-2 py-1 h-auto flex items-center gap-1 text-gray-500 hover:text-gray-700"
                         >
-                          {isSavingJobInfo ? 'Saving...' : (isJobInfoDirty ? 'Save Job Info' : 'Job Info Saved')}
+                          {isJobInfoVisible ? (
+                            <ChevronUpIcon className="h-4 w-4" />
+                          ) : (
+                            <ChevronDownIcon className="h-4 w-4" />
+                          )}
+                          {isJobInfoVisible ? 'Collapse' : 'Expand'}
                         </Button>
                       </div>
-                    </div>
-                  )}
-                </Card>
+
+                    {/* Collapsible Content */}
+                    {isJobInfoVisible && (
+                      <div className="space-y-4 pt-4 border-t border-gray-100">
+                        <InputGroup
+                          label="Job Title"
+                          id="jobTitle"
+                          value={jobTitle}
+                          onChange={handleJobTitleChange}
+                          placeholder="e.g. Frontend Developer"
+                        />
+                        <InputGroup
+                          label="Company"
+                          id="jobCompany"
+                          value={jobCompany}
+                          onChange={handleJobCompanyChange}
+                          placeholder="e.g. Tech Solutions Inc."
+                        />
+                        <TextAreaGroup
+                          label="Job Description"
+                          id="jobDescription"
+                          value={jobDescription}
+                          onChange={handleJobDescriptionChange}
+                          placeholder="Copy and paste the job description here..."
+                          rows={4}
+                        />
+                        <TextAreaGroup
+                          label="Key Responsibilities"
+                          id="jobResponsibilities"
+                          value={jobResponsibilities}
+                          onChange={handleJobResponsibilitiesChange}
+                          placeholder="List the key responsibilities from the job description..."
+                          rows={3}
+                        />
+                        {/* Save Button */}
+                        <div className="flex justify-end pt-2">
+                          <Button
+                            onClick={saveJobInfoToDb}
+                            disabled={!isJobInfoDirty || isSavingJobInfo}
+                            loading={isSavingJobInfo}
+                            size="sm"
+                          >
+                            {isSavingJobInfo ? 'Saving...' : (isJobInfoDirty ? 'Save Job Info' : 'Job Info Saved')}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+              </div>
+            </div>
+
+            {/* Right Column (History) - Takes 1/3 width on large screens */}
+            <div className="lg:col-span-1 space-y-6">
+              <Card title="Answer History">
+                {recentAnswers.length > 0 ? (
+                  <div className="space-y-3">
+                    {recentAnswers.map((item) => (
+                      <HistoryItem 
+                        key={item.id} 
+                        item={item} 
+                        onViewReuse={handleReuseHistory} 
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-gray-500">
+                    <DocumentTextIcon className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm font-medium text-gray-700 mb-1">No history yet</p>
+                    <p className="text-xs">Your generated answers will appear here.</p>
+                  </div>
+                )}
+              </Card>
             </div>
           </div>
-
-          {/* Right Column (History) - Takes 1/3 width on large screens */}
-          <div className="lg:col-span-1 space-y-6">
-            <Card title="Answer History">
-              {recentAnswers.length > 0 ? (
-                <div className="space-y-3">
-                  {recentAnswers.map((item) => (
-                    <HistoryItem 
-                      key={item.id} 
-                      item={item} 
-                      onViewReuse={handleReuseHistory} 
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-6 text-gray-500">
-                  <DocumentTextIcon className="h-10 w-10 text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-gray-700 mb-1">No history yet</p>
-                  <p className="text-xs">Your generated answers will appear here.</p>
-                </div>
-              )}
-            </Card>
-          </div>
-        </div>
+        )}
       </main>
 
       {/* Footer */}

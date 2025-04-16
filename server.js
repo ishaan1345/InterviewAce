@@ -281,6 +281,62 @@ app.post('/api/generate-answer', async (req, res) => {
   }
 });
 
+// NEW Endpoint for Live Interview Mode turns
+app.post('/api/live-interview-turn', async (req, res) => {
+  console.log("Received request for /api/live-interview-turn");
+  try {
+    // TODO: Add authentication check here later (ensure user is logged in)
+    // const { data: { user } } = await supabaseAdmin.auth.getUser(req.headers.authorization?.split(' ')[1]);
+    // if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    // TODO: Check if user is subscribed using profile table? Depends on security needs.
+
+    const {
+      resumeText, 
+      jobInfo, 
+      question, 
+      conversationHistory // Array of { question: string, answer: string }
+    } = req.body;
+
+    console.log("Live Turn Data Received:");
+    console.log("Question:", question);
+    console.log("History Length:", conversationHistory?.length || 0);
+    // console.log("Resume Text Length:", resumeText?.length || 0);
+    // console.log("Job Info:", jobInfo);
+
+    // --- Placeholder Logic (Replace with actual GPT-4o call) --- 
+    // 1. Format conversation history
+    let historyString = "";
+    if (Array.isArray(conversationHistory)) {
+      historyString = conversationHistory.map(turn => 
+        `Interviewer: ${turn.question}\nCandidate: ${turn.answer}`
+      ).join('\n\n');
+    }
+
+    // 2. Construct Prompt (using v6 from previous step or similar)
+    //    Remember to include the historyString and specific instructions for live mode.
+    const systemPromptLive = `SYSTEM_PROMPT_FOR_LIVE_MODE_GPT4o - Include instructions to use history: ${historyString}`; // Placeholder
+    const userPromptLive = `Current Question: ${question}\n\nResume:\n${resumeText}\n\nJob Info:\n${JSON.stringify(jobInfo)}`; // Placeholder
+
+    console.log("Placeholder for OpenAI call with history.");
+    // 3. Make OpenAI call (GPT-4o recommended)
+    // const response = await openai.chat.completions.create({ model: 'gpt-4o', ... });
+    // const answer = response.choices[0].message.content.trim();
+    
+    // 4. Return generated answer (using placeholder for now)
+    const placeholderAnswer = `This is a placeholder answer for the live question: \"${question}\". I acknowledge the history of ${conversationHistory?.length || 0} turns. My actual answer would be based on the resume and job info, avoiding repetition.`;
+    // --- End Placeholder Logic ---
+
+    res.json({ answer: placeholderAnswer });
+
+  } catch (error) {
+    console.error('Error in /api/live-interview-turn:', error);
+    res.status(500).json({ 
+      error: 'An error occurred during the live interview turn', 
+      message: error.message 
+    });
+  }
+});
+
 // Build path for static files
 const buildPath = path.join(__dirname, 'dist');
 
@@ -440,4 +496,4 @@ const startServer = async () => {
   }
 };
 
-startServer();
+startServer(); 
