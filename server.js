@@ -274,6 +274,15 @@ app.use(express.static(buildPath, {
   }
 }));
 
+// Serve index.html for all other routes - client-side routing
+app.get('*', (req, res) => {
+  // Skip API routes
+  if (req.path.startsWith('/api/')) {
+    return next();
+  }
+  res.sendFile(path.join(buildPath, 'index.html'));
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ 
