@@ -32,22 +32,218 @@ import Modal from './components/common/Modal';
 // Import Supabase client
 import { supabase } from './supabaseClient'; // Import Supabase client
 
+// Import Deepgram SDK
+import { createClient } from "@deepgram/sdk";
+
 // Fix the version mismatch - update worker to version 3.11.174 to match the API version
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 // API URL Configuration
 const apiUrl = '/api/generate-answer'; // Use relative path for deployment
+const deepgramTokenUrl = '/api/deepgram/token'; // Endpoint for temporary tokens
 
 // Placeholder for the new feature component
 const LiveInterviewMode = ({ onEndSession }) => {
+  const [deepgramToken, setDeepgramToken] = useState('');
+  const [connectionStatus, setConnectionStatus] = useState('Connecting...'); // e.g., Connecting..., Ready, Listening, Error, Closed
+  const [transcript, setTranscript] = useState('');
+  const [interimTranscript, setInterimTranscript] = useState(''); // For faster updates
+  const [isMicReady, setIsMicReady] = useState(false);
+  const [error, setError] = useState(null);
+
+  const deepgramConnection = useRef(null);
+  const mediaRecorder = useRef(null);
+
+  // Fetch temporary token and initialize Deepgram
+  useEffect(() => {
+    let isMounted = true; // Flag to prevent state updates on unmounted component
+    let recorder;
+    let dgConnection;
+
+    const setupDeepgram = async () => {
+      setError(null);
+      setConnectionStatus('Fetching token...');
+      try {
+        // 1. Fetch temporary token from backend
+        const response = await fetch(deepgramTokenUrl, { method: 'POST' });
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || `Token fetch failed: ${response.statusText}`);
+        }
+        const data = await response.json();
+        if (!isMounted) return;
+        setDeepgramToken(data.deepgramToken);
+
+        // 2. Initialize Deepgram client
+        const deepgram = createClient(data.deepgramToken);
+
+        // 3. Create WebSocket connection
+        setConnectionStatus('Initializing connection...');
+        dgConnection = deepgram.listen.live({
+          model: "nova-2", // Or your preferred model
+          language: "en-US",
+          smart_format: true,
+          interim_results: true, // Get faster updates
+          // Other options: encoding, sampleRate, keywords, etc.
+        });
+        deepgramConnection.current = dgConnection; // Store reference
+
+        // 4. Setup WebSocket event listeners
+        dgConnection.on("open", () => {
+          console.log("Deepgram connection opened.");
+          if (isMounted) setConnectionStatus('Requesting Mic...');
+          setupMicrophone(); // Request mic access *after* connection opens
+        });
+
+        dgConnection.on("close", (event) => {
+          console.log("Deepgram connection closed.", event);
+          if (isMounted) {
+             setConnectionStatus('Connection Closed');
+             if (event.code !== 1000) { // 1000 = normal closure
+               setError(`Connection closed unexpectedly: ${event.reason} (Code: ${event.code})`);
+             }
+          }
+          // Cleanup mic/recorder if connection closes unexpectedly
+          if (recorder && recorder.state === 'recording') recorder.stop();
+          mediaRecorder.current = null;
+          deepgramConnection.current = null;
+        });
+
+        dgConnection.on("error", (err) => {
+          console.error("Deepgram connection error:", err);
+          if (isMounted) {
+            setError(`Connection Error: ${err.message || 'Unknown error'}`);
+            setConnectionStatus('Error');
+          }
+        });
+
+        dgConnection.on("transcript", (data) => {
+          const currentTranscript = data.channel.alternatives[0].transcript;
+          if (currentTranscript) {
+            if (data.is_final) {
+              // Append final transcript
+              setTranscript((prev) => (prev ? prev + ' ' + currentTranscript : currentTranscript).trim());
+              setInterimTranscript(''); // Clear interim
+              // TODO: Here you could trigger the API call to /api/live-interview-turn with the final question/utterance
+              console.log("Final Transcript Segment:", currentTranscript);
+            } else {
+              // Update interim transcript
+              setInterimTranscript(currentTranscript);
+            }
+          }
+        });
+
+      } catch (err) {
+        console.error("Error setting up Deepgram:", err);
+        if (isMounted) {
+          setError(err.message || "Failed to initialize live mode.");
+          setConnectionStatus('Error');
+        }
+      }
+    };
+
+    const setupMicrophone = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' }); // Adjust mimeType if needed
+        mediaRecorder.current = recorder; // Store reference
+
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0 && deepgramConnection.current?.getReadyState() === 1) { // 1 = OPEN
+             deepgramConnection.current.send(event.data);
+          }
+        };
+
+        recorder.onstart = () => {
+          if (isMounted) {
+             console.log("Microphone recording started.");
+             setConnectionStatus('Listening...');
+             setIsMicReady(true);
+          }
+        };
+
+        recorder.onstop = () => {
+          console.log("Microphone recording stopped.");
+          if (isMounted) setIsMicReady(false);
+          // Attempt graceful close of Deepgram connection when mic stops
+          if (deepgramConnection.current?.getReadyState() === 1) {
+            deepgramConnection.current.finish();
+          }
+        };
+
+        recorder.onerror = (event) => {
+          console.error("MediaRecorder error:", event.error);
+          if (isMounted) {
+            setError(`Microphone Error: ${event.error.name} - ${event.error.message}`);
+            setConnectionStatus('Error');
+          }
+          // Close Deepgram connection on mic error
+          if (deepgramConnection.current?.getReadyState() === 1) {
+            deepgramConnection.current.finish();
+          }
+        }
+
+        recorder.start(250); // Send data chunks every 250ms
+
+      } catch (err) {
+        console.error("Error accessing microphone:", err);
+        if (isMounted) {
+          setError(`Microphone access denied or failed: ${err.message}. Please check browser permissions.`);
+          setConnectionStatus('Error');
+          // Close connection if mic fails
+          if (deepgramConnection.current?.getReadyState() === 1) {
+             deepgramConnection.current.finish();
+          }
+        }
+      }
+    };
+
+    setupDeepgram();
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+      console.log("Cleaning up LiveInterviewMode...");
+      if (mediaRecorder.current && mediaRecorder.current.state === 'recording') {
+        mediaRecorder.current.stop();
+      }
+      if (deepgramConnection.current && deepgramConnection.current.getReadyState() === 1) {
+        deepgramConnection.current.finish(); // Gracefully close
+      }
+      mediaRecorder.current = null;
+      deepgramConnection.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once on mount
+
   // TODO: Build out the live interview UI and logic here
   return (
-    <Card title="Live Interview Mode (Premium Feature)">
-      <p className="text-gray-600 mb-4">This feature will provide real-time transcription and context-aware AI answers.</p>
-      <p className="text-sm mb-4">[Live transcript will appear here]</p>
-      <p className="text-sm mb-4">[Current AI response will appear here]</p>
-      <p className="text-sm mb-4">[Conversation history might appear here]</p>
-      <Button onClick={onEndSession} variant="danger">End Live Session</Button>
+    <Card title="Live Interview Mode">
+      <div className="mb-4 space-y-2">
+        <p className="text-sm font-medium text-gray-600">Status: <span className={`font-semibold ${error ? 'text-red-600' : 'text-green-600'}`}>{connectionStatus}</span></p>
+        {error && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">Error: {error}</p>}
+      </div>
+
+      <div className="bg-gray-50 p-4 rounded-md min-h-[200px] shadow-inner space-y-3 mb-4">
+         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Live Transcript</h3>
+         <p className="text-sm text-gray-800 whitespace-pre-wrap">{transcript}</p>
+         {interimTranscript && (
+           <p className="text-sm text-gray-500 italic whitespace-pre-wrap">{interimTranscript}</p>
+         )}
+         {connectionStatus === 'Listening...' && !transcript && !interimTranscript && (
+           <p className="text-sm text-gray-400 animate-pulse">Listening for speech...</p>
+         )}
+         {connectionStatus !== 'Listening...' && !transcript && !interimTranscript && !error && (
+           <p className="text-sm text-gray-400">Waiting to connect or start listening...</p>
+         )}
+      </div>
+
+      {/* <p className="text-sm mb-4">[Current AI response will appear here]</p>
+      <p className="text-sm mb-4">[Conversation history might appear here]</p> */} 
+
+      <Button onClick={onEndSession} variant="danger">
+        End Live Session
+      </Button>
     </Card>
   );
 };

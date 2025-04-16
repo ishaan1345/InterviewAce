@@ -12,6 +12,8 @@ import { execSync } from 'child_process';
 // Import the Tailwind middleware
 import { tailwindMiddleware, generateInlineTailwind } from './tailwind-inline.js';
 import { createClient } from '@supabase/supabase-js';
+// Import Deepgram SDK
+import { createClient as createDeepgramClient } from "@deepgram/sdk";
 
 dotenv.config();
 
@@ -32,6 +34,18 @@ if (supabaseAdmin) {
   console.log('Supabase admin client initialized successfully.');
 } else {
   console.warn('Supabase admin client could not be initialized. Check environment variables.');
+}
+
+// Initialize Deepgram Client (Server-side)
+const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
+if (!deepgramApiKey) {
+  console.warn('DEEPGRAM_API_KEY environment variable not set. Live transcription will not work.');
+}
+const deepgramClient = deepgramApiKey ? createDeepgramClient(deepgramApiKey) : null;
+if (deepgramClient) {
+  console.log('Deepgram client initialized successfully.');
+} else {
+  console.warn('Deepgram client could not be initialized.');
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -334,6 +348,40 @@ app.post('/api/live-interview-turn', async (req, res) => {
       error: 'An error occurred during the live interview turn', 
       message: error.message 
     });
+  }
+});
+
+// NEW Endpoint to generate temporary Deepgram API keys
+app.post('/api/deepgram/token', async (req, res) => {
+  // TODO: Add authentication check here - ensure user is logged in and maybe subscribed
+  // const { data: { user } } = await supabaseAdmin.auth.getUser(req.headers.authorization?.split(' ')[1]);
+  // if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+  if (!deepgramClient) {
+    return res.status(500).json({ error: 'Deepgram client not initialized on server.' });
+  }
+
+  try {
+    // Create a temporary key with specific capabilities (e.g., streaming) and a time-to-live (TTL)
+    // Adjust scopes and TTL as needed for your application
+    const newKey = await deepgramClient.manage.createProjectKey(
+      process.env.DEEPGRAM_PROJECT_ID, // Assuming you might set PROJECT_ID env var, otherwise use default project
+      {
+        comment: "Temporary key for InterviewAce live session",
+        scopes: ["usage:write"], // Allows creating transcriptions
+        time_to_live_in_seconds: 60 * 60, // Key valid for 1 hour
+      }
+    );
+
+    if (newKey.key) {
+      res.json({ deepgramToken: newKey.key });
+    } else {
+      console.error("Deepgram key creation response missing key:", newKey);
+      res.status(500).json({ error: 'Failed to generate Deepgram token.' });
+    }
+  } catch (error) {
+    console.error('Error generating Deepgram token:', error);
+    res.status(500).json({ error: 'Could not generate Deepgram token', message: error.message });
   }
 });
 
