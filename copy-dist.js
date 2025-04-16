@@ -25,68 +25,80 @@ async function copyBuildFiles() {
     await fs.copy(srcPath, destPath);
     console.log(`Successfully copied build files from ${srcPath} to ${destPath}`);
     
-    // Handle CSS files specially for better styling support
+    // Ensure CSS is properly included in the build
     try {
-      // Create the assets directory if it doesn't exist
+      // Create assets directory if it doesn't exist
       const assetsPath = path.join(destPath, 'assets');
       await fs.ensureDir(assetsPath);
       
-      // Copy the default CSS file
-      const defaultCssPath = path.join(__dirname, 'default-styles.css');
-      const defaultCssExists = await fs.pathExists(defaultCssPath);
-      
-      if (defaultCssExists) {
-        await fs.copy(defaultCssPath, path.join(assetsPath, 'default-styles.css'));
-        console.log('Successfully copied default styles to assets folder');
-      }
-      
-      // Copy the src/index.css file for Tailwind directives
-      const srcIndexCssPath = path.join(__dirname, 'src', 'index.css');
-      const srcIndexCssExists = await fs.pathExists(srcIndexCssPath);
-      
-      if (srcIndexCssExists) {
-        await fs.copy(srcIndexCssPath, path.join(assetsPath, 'index-source.css'));
-        console.log('Successfully copied source index.css with Tailwind directives');
-      }
-      
-      // Find and ensure all CSS files are copied
+      // Get all CSS files from the build
       const cssFiles = await findFiles(srcPath, '.css');
       console.log(`Found ${cssFiles.length} CSS files in the build`);
       
-      // Create a combined CSS file for stability
-      const combinedCssPath = path.join(assetsPath, 'combined-styles.css');
-      let combinedCss = '/* Combined CSS for InterviewAce */\n\n';
+      // Create a simple CSS file to ensure basic styling works
+      const cssContent = `/* Basic CSS to ensure styling works */
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f9fafb;
+  color: #111827;
+  line-height: 1.5;
+}
+
+.card {
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+button {
+  background-color: #0073ff;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  border: none;
+  cursor: pointer;
+}
+
+.bg-white { background-color: white; }
+.bg-gray-50 { background-color: #f9fafb; }
+.bg-gray-100 { background-color: #f3f4f6; }
+.text-gray-700 { color: #374151; }
+.text-gray-900 { color: #111827; }
+`;
       
-      for (const cssFile of cssFiles) {
-        const cssContent = await fs.readFile(cssFile, 'utf8');
-        combinedCss += `/* From ${path.basename(cssFile)} */\n${cssContent}\n\n`;
-      }
+      // Write a backup CSS file
+      const backupCssPath = path.join(assetsPath, 'backup-styles.css');
+      await fs.writeFile(backupCssPath, cssContent);
       
-      if (defaultCssExists) {
-        const defaultCss = await fs.readFile(defaultCssPath, 'utf8');
-        combinedCss += `/* Default styles */\n${defaultCss}\n`;
-      }
-      
-      await fs.writeFile(combinedCssPath, combinedCss);
-      console.log(`Created combined CSS file at ${combinedCssPath}`);
-      
-      // Inject the combined CSS into index.html
+      // Update index.html to include both CSS files
       const indexHtmlPath = path.join(destPath, 'index.html');
       if (await fs.pathExists(indexHtmlPath)) {
         let htmlContent = await fs.readFile(indexHtmlPath, 'utf8');
         
-        // Check if we need to add the combined CSS
-        if (!htmlContent.includes('combined-styles.css')) {
+        // Ensure all CSS imports are properly linked
+        const headCloseTag = '</head>';
+        const cssLinks = cssFiles.map(file => {
+          const relativePath = path.relative(destPath, file);
+          return `  <link rel="stylesheet" href="./${relativePath.replace(/\\/g, '/')}">\n`;
+        }).join('');
+        
+        // Add backup CSS link
+        const backupCssLink = `  <link rel="stylesheet" href="./assets/backup-styles.css">\n`;
+        
+        // Replace head close tag with CSS links followed by the tag
+        if (!htmlContent.includes('backup-styles.css')) {
           htmlContent = htmlContent.replace(
-            '</head>',
-            `  <link rel="stylesheet" href="/assets/combined-styles.css">\n</head>`
+            headCloseTag,
+            `${cssLinks}${backupCssLink}${headCloseTag}`
           );
           await fs.writeFile(indexHtmlPath, htmlContent);
-          console.log('Injected combined CSS link into index.html');
+          console.log('Updated index.html with CSS links');
         }
       }
     } catch (cssErr) {
-      console.warn('Error handling CSS files:', cssErr);
+      console.error('Error handling CSS files:', cssErr);
     }
   } catch (err) {
     console.error('Error copying build files:', err);

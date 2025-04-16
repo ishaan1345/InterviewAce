@@ -261,32 +261,32 @@ app.use((req, res, next) => {
 // Apply tailwind middleware for HTML responses
 app.use(tailwindMiddleware(buildPath));
 
-// Generate inline tailwind styles for production
-if (IS_PRODUCTION) {
-  try {
-    generateInlineTailwind();
-    console.log('Generated inline Tailwind CSS for production');
-  } catch (err) {
-    console.error('Error generating inline Tailwind:', err);
-  }
-}
+// Disable inline Tailwind generation - rely on proper CSS files
+// if (IS_PRODUCTION) {
+//   try {
+//     generateInlineTailwind();
+//     console.log('Generated inline Tailwind CSS for production');
+//   } catch (err) {
+//     console.error('Error generating inline Tailwind:', err);
+//   }
+// }
 
 // Serve static files with proper cache headers
 app.use(express.static(buildPath, {
-  maxAge: process.env.NODE_ENV === 'production' ? '1d' : '0', // Shorter cache in production for quick updates
+  maxAge: '1d', // Set to 1 day for all static assets
   etag: true,
   index: false, // Don't automatically serve index.html
   setHeaders: (res, filePath) => {
-    // Set no-cache for HTML files
+    // Ensure HTML files are not cached
     if (filePath.endsWith('.html')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
     }
-    // Ensure CSS files are properly cached and have correct content type
+    // Ensure CSS files have correct headers and no caching in development
     if (filePath.endsWith('.css')) {
       res.setHeader('Content-Type', 'text/css');
-      res.setHeader('Cache-Control', 'public, max-age=0'); // No caching for CSS during deployment
+      res.setHeader('Cache-Control', IS_PRODUCTION ? 'public, max-age=86400' : 'no-cache');
     }
   }
 }));
