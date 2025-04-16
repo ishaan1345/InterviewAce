@@ -278,7 +278,7 @@ app.use(express.static(buildPath, {
 app.get('*', (req, res) => {
   // Skip API routes
   if (req.path.startsWith('/api/')) {
-    return next();
+    return res.status(404).send('Not found');
   }
   res.sendFile(path.join(buildPath, 'index.html'));
 });
