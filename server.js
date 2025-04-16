@@ -11,7 +11,6 @@ import rateLimit from 'express-rate-limit';
 import { execSync } from 'child_process';
 // Import the Tailwind middleware
 import { tailwindMiddleware, generateInlineTailwind } from './tailwind-inline.js';
-import { Configuration, OpenAIApi } from 'openai';
 import { createDirectStylesMiddleware } from './direct-styles.js';
 
 dotenv.config();
@@ -120,10 +119,9 @@ app.use(cors({
 app.use(bodyParser.json({ limit: '10mb' }));
 
 // Configure OpenAI client with API key from environment
-const configuration = new Configuration({
+const openai = new OpenAI({
   apiKey: OPENAI_API_KEY
 });
-const openai = new OpenAIApi(configuration);
 
 // Simple in-memory cache with TTL
 const cache = new Map();
