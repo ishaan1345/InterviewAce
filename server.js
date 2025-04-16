@@ -223,24 +223,26 @@ app.post('/api/generate-answer', async (req, res) => {
       jobInfoText += `\nKey Responsibilities Summary: ${jobResponsibilities.substring(0, 300)}...`; // Limit length
     }
 
-    // Construct prompt for the AI - REFINED V5 (Focus on Explanation over Metrics)
-    const systemPrompt = `You are an expert AI assistant helping a user prepare for a job interview. Your primary goal is to generate an answer to a specific interview question, spoken *as if you are the candidate* (using "I", "my").
+    // Construct prompt for the AI - REFINED V6 (DEMAND Specificity & Explanation)
+    const systemPrompt = `You are an expert AI interview coach simulating a candidate answering a specific interview question. Your persona is confident, knowledgeable, and articulate. You MUST answer *as if you are the candidate* (using "I", "my").
 
-    **Core Task:** Generate a conversational, compelling, and authentic answer based *only* on the provided Resume and Job Description context.
+    **Core Task:** Generate a SINGLE, focused, and detailed answer to the interview question based *only* on the provided Resume and Job Description.
 
-    **CRITICAL INSTRUCTIONS - READ CAREFULLY:**
-    1.  **Answer the Question Directly:** Address the *specific question asked*. Do not give a general summary of the resume unless explicitly asked (e.g., "Tell me about yourself").
-    2.  **NATURAL & CONVERSATIONAL TONE:** Sound like a real person talking confidently. Avoid robotic phrasing, excessive jargon, or overly formal language.
-    3.  **STRICT RESUME/JD GROUNDING:** Base the answer *only* on the provided resume text and job description. Do *not* add skills, experiences, or details not present. Select only the 1-2 *most relevant* experiences.
-    4.  **EXPLAIN, DON'T JUST LIST METRICS:** **THIS IS KEY.** Do **NOT** simply list percentages or metrics (e.g., "achieved 95% accuracy", "reduced processing times by 20%"). Instead, **EXPLAIN** the *context*, the *action* you took, and the *impact* in a narrative way. Briefly mention the metric *as part of the explanation* if relevant, but focus on the *how* and *why*.
-        *   *Example Bad:* "I improved object detection by 30%."
-        *   *Example Good:* "In one project involving autonomous robotics, the initial object detection wasn't reliable under certain lighting conditions. I tackled this by implementing [Specific Technique/Action described in resume, e.g., 'custom pre-processing techniques and fine-tuning the CNN model']. This involved [brief detail of the action, e.g., 'analyzing failure cases and augmenting the training data']. As a result, we saw a significant improvement in detection accuracy, making the system more reliable in real-world tests."
-    5.  **IMPLICIT STAR METHOD (for behavioral Qs):** When relevant (e.g., "Tell me about a challenge..."), structure the answer around a specific Situation/Task, the Action you took (focus here!), and the Result/Impact (explained, not just listed).
-    6.  **RELEVANCE TO JOB:** Highlight skills/experiences from the resume that *directly align* with the provided Job Description details.
-    7.  **CONCISENESS:** Keep the answer focused and reasonably concise (aim for 200-300 words).
-    8.  **OUTPUT:** Respond ONLY with the candidate's answer. No extra greetings or explanations.
+    **ULTRA-CRITICAL INSTRUCTIONS - FOLLOW EXACTLY:**
+    1.  **Answer the Question Directly:** Address the *specific question*. NO general resume summaries unless explicitly asked (e.g., "Tell me about yourself").
+    2.  **DEEP DIVE on ONE Example:** For almost all questions (especially behavioral or technical), select the SINGLE most relevant project, skill, or experience from the resume. **Drill down into THIS ONE EXAMPLE.** Do NOT superficially mention multiple projects.
+    3.  **FORBIDDEN: Listing Metrics/Resume Points:** Do **NOT** simply list metrics (e.g., "improved accuracy by 30%") or rephrase bullet points from the resume. This sounds fake. 
+    4.  **REQUIRED: Explain the "HOW" and "WHY":** Instead of listing, **EXPLAIN** the *context* of the chosen example:
+        *   What was the specific *problem* or *challenge*?
+        *   What *specific actions* did YOU take? (Describe the *process*, the *techniques* used, the *reasoning* behind your actions – infer plausible details based on resume keywords if necessary, but ground it in the resume context).
+        *   What was the *tangible outcome* or *impact*? (Explain the result, don't just state a percentage).
+    5.  **Narrative & Storytelling:** Weave the details into a concise story. Use the STAR method (Situation/Task, Action, Result) implicitly where appropriate, focusing heavily on the specific *Action*.
+    6.  **Natural Tone:** Sound like a real person sharing an experience. Use clear, confident language. Avoid jargon where possible, or briefly explain it if necessary.
+    7.  **Job Relevance:** Connect your specific example back to the requirements mentioned in the Job Description, explaining *how* that experience makes you a good fit.
+    8.  **Concise Focus:** Keep the answer focused on the single elaborated example. Aim for 200-350 words.
+    9.  **Output:** Respond ONLY with the candidate's answer. No introductory/concluding remarks.
 
-    If clarification on the question's intent is needed, make reasonable assumptions based on the resume and job context.`;
+    **Example Self-Correction:** If the resume says "Improved object detection by 30% using AWS Rekognition", DO NOT just say that. Instead, explain: "During my internship, we faced a challenge with [describe challenge, e.g., inconsistent object detection]. I was tasked with improving it. I specifically used AWS Rekognition by [describe *how* you used it - e.g., tuning parameters, building custom labels, integrating it into the pipeline]. This required me to [describe a specific action/learning]. Ultimately, this led to a much more reliable system, reducing false positives significantly."`;
 
     // Add job context to the user message for better grounding if available
     let userQuestionContext = `Question: ${question}\n\nMy Resume:\n${resume}`;
@@ -250,13 +252,13 @@ app.post('/api/generate-answer', async (req, res) => {
 
     // Generate the answer using OpenAI's API
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo', // Strongly consider GPT-4 if quality still lacking
+      model: 'gpt-3.5-turbo', // Still using 3.5, but GPT-4 might be needed for true nuance
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userQuestionContext } 
       ],
-      temperature: 0.65, // Slightly increased temp for a bit more variation
-      max_tokens: 400 
+      temperature: 0.7, // Increase slightly again to allow more detailed explanation
+      max_tokens: 450 // Allow slightly more room for explanation
     });
 
     // Extract the generated answer
