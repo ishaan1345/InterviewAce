@@ -11,7 +11,6 @@ import rateLimit from 'express-rate-limit';
 import { execSync } from 'child_process';
 // Import the Tailwind middleware
 import { tailwindMiddleware, generateInlineTailwind } from './tailwind-inline.js';
-import { createDirectStylesMiddleware } from './direct-styles.js';
 
 dotenv.config();
 
@@ -256,8 +255,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Apply direct styles middleware
-app.use(createDirectStylesMiddleware());
+// Apply tailwind middleware for HTML responses
+app.use(tailwindMiddleware(buildPath));
 
 // Serve static files with proper cache headers
 app.use(express.static(buildPath, {
@@ -275,10 +274,10 @@ app.use(express.static(buildPath, {
 }));
 
 // Serve index.html for all other routes - client-side routing
-app.get('*', (req, res) => {
-  // Skip API routes
+app.get('*', (req, res, next) => {
+  // Skip API routes and forward them to the next middleware
   if (req.path.startsWith('/api/')) {
-    return res.status(404).send('Not found');
+    return next();
   }
   res.sendFile(path.join(buildPath, 'index.html'));
 });
