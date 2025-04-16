@@ -239,15 +239,19 @@ ${jobInfoText ? `The candidate is applying for:${jobInfoText}` : ''}`;
 
 // Serve static files in production
 if (IS_PRODUCTION) {
-  // Set the correct path to the build directory (this was incorrect)
-  const buildPath = path.join(__dirname, 'src', 'dist');
+  // FIXED: The correct build path is dist in the root, not src/dist
+  const buildPath = path.join(__dirname, 'dist');
   console.log(`Serving static files from: ${buildPath}`);
   
-  // Serve static files with explicit MIME types for CSS
+  // Serve static files with explicit MIME types for CSS and other assets
   app.use(express.static(buildPath, {
-    setHeaders: (res, path) => {
-      if (path.endsWith('.css')) {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.css')) {
         res.setHeader('Content-Type', 'text/css');
+      } else if (filePath.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript');
+      } else if (filePath.endsWith('.json')) {
+        res.setHeader('Content-Type', 'application/json');
       }
     }
   }));
