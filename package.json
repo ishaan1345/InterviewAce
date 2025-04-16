@@ -17,7 +17,7 @@
     "dev-clean": "node scripts/cleanup.js",
     "build": "cd src && npm run build",
     "postinstall": "cd src && npm install",
-    "heroku-postbuild": "cd src && npm install && npm run build",
+    "heroku-postbuild": "npm install -g vite && cd src && npm install && npm run build",
     "verify": "node verify-tools.js"
   },
   "keywords": [
