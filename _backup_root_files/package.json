@@ -1,0 +1,29 @@
+{
+    "name": "interviewace-backend",
+    "version": "1.0.0",
+    "type": "module",
+    "scripts": {
+        "build": "cd interviewace && npm run build",
+        "dev": "nodemon server.js",
+        "dev:all": "concurrently \"cd interviewace && npm run dev\" \"node server.js\"",
+        "start": "node server.js"
+    },
+    "dependencies": {
+        "axios": "^1.8.4",
+        "body-parser": "^1.20.3",
+        "cors": "^2.8.5",
+        "dotenv": "^16.5.0",
+        "express": "^4.21.2",
+        "express-rate-limit": "^7.5.0",
+        "helmet": "^7.2.0",
+        "openai": "^3.3.0",
+        "winston": "^3.17.0",
+        "winston-daily-rotate-file": "^5.0.0"
+    },
+    "engines": {
+        "node": "18.x"
+    },
+    "devDependencies": {
+        "nodemon": "^3.1.9"
+    }
+}
