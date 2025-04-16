@@ -21,19 +21,32 @@ dotenv.config();
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
 
+// --- BEGIN DEBUG LOGGING ---
+console.log(`DEBUG: Supabase URL found in env: ${!!supabaseUrl}`); 
+console.log(`DEBUG: Supabase Service Key found in env: ${!!supabaseServiceKey}`); 
+// --- END DEBUG LOGGING ---
+
+let supabaseAdmin = null; // Initialize as null
+
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error('ERROR: SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables are required for the backend.');
-  // Optionally exit if Supabase is critical, or continue if it's progressively enhanced
-  // process.exit(1);
+} else {
+  // Attempt to create client only if vars seem present
+  try {
+    console.log("Attempting to initialize Supabase admin client...");
+    supabaseAdmin = createSupabaseClient(supabaseUrl, supabaseServiceKey);
+    console.log("Supabase admin client initialization attempt finished.");
+  } catch (error) {
+    console.error('EXCEPTION during Supabase admin client initialization:', error);
+    supabaseAdmin = null; // Ensure it's null on error
+  }
 }
 
-// Note: We are initializing Supabase here, but database interactions will be added later.
-// Use the service key for backend operations that might require elevated privileges.
-const supabaseAdmin = supabaseUrl && supabaseServiceKey ? createSupabaseClient(supabaseUrl, supabaseServiceKey) : null;
+// Check initialization result
 if (supabaseAdmin) {
   console.log('Supabase admin client initialized successfully.');
 } else {
-  console.warn('Supabase admin client could not be initialized. Check environment variables.');
+  console.warn('Supabase admin client could not be initialized. Check environment variables and previous logs.');
 }
 
 // Initialize Deepgram Client (Server-side)
