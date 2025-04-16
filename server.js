@@ -245,6 +245,17 @@ if (IS_PRODUCTION) {
   const buildPath = path.join(__dirname, 'dist');
   console.log(`Serving static files from: ${buildPath}`);
   
+  // Inject direct styles to ensure styles work regardless of CSS loading issues
+  import('./direct-styles.js')
+    .then(module => {
+      const { createDirectStylesMiddleware } = module;
+      console.log('Using direct styles middleware');
+      app.use(createDirectStylesMiddleware());
+    })
+    .catch(err => {
+      console.warn('Could not load direct styles middleware:', err.message);
+    });
+  
   // Cache static assets for improved performance
   const staticOptions = {
     etag: true,
