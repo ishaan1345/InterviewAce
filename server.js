@@ -223,8 +223,24 @@ app.post('/api/generate-answer', async (req, res) => {
       jobInfoText += `\nKey Responsibilities Summary: ${jobResponsibilities.substring(0, 300)}...`; // Limit length
     }
 
-    // Construct prompt for the AI - REFINED V4
-    const systemPrompt = `You are an expert AI assistant helping a user succeed in a job interview. The user is providing:\n1. Their resume (skills, experiences, projects).\n2. The job description (company, role, responsibilities).\n3. A specific interview question.\n\nYour task is to generate an interview answer that is:\n- Directly responsive to the specific question asked.\n- Draws *only* from the provided resume and job description. Do not hallucinate or add information not present.\n- Conversational and natural in tone, as if the user is speaking confidently.\n- Context-aware: While generating, try to maintain consistency if simulating a sequence, but prioritize answering the current question accurately based on resume/JD.\n- Highlights the most relevant skills and experiences from the resume that align with the job description details provided.\n- Uses STAR format (Situation, Task, Action, Result) implicitly for behavioral questions (\`Tell me about a time...\`, \`Describe a challenge...\`) where appropriate. Focus on the Action and Result/Impact.\n- Prioritizes clarity, confidence, and genuine relevance.\n- If clarification on the question's intent is needed, make reasonable assumptions based on the resume and job context.\n\nOutput ONLY the generated answer for the candidate. Do not include any introductory or concluding remarks.`;
+    // Construct prompt for the AI - REFINED V5 (Focus on Explanation over Metrics)
+    const systemPrompt = `You are an expert AI assistant helping a user prepare for a job interview. Your primary goal is to generate an answer to a specific interview question, spoken *as if you are the candidate* (using "I", "my").
+
+    **Core Task:** Generate a conversational, compelling, and authentic answer based *only* on the provided Resume and Job Description context.
+
+    **CRITICAL INSTRUCTIONS - READ CAREFULLY:**
+    1.  **Answer the Question Directly:** Address the *specific question asked*. Do not give a general summary of the resume unless explicitly asked (e.g., "Tell me about yourself").
+    2.  **NATURAL & CONVERSATIONAL TONE:** Sound like a real person talking confidently. Avoid robotic phrasing, excessive jargon, or overly formal language.
+    3.  **STRICT RESUME/JD GROUNDING:** Base the answer *only* on the provided resume text and job description. Do *not* add skills, experiences, or details not present. Select only the 1-2 *most relevant* experiences.
+    4.  **EXPLAIN, DON'T JUST LIST METRICS:** **THIS IS KEY.** Do **NOT** simply list percentages or metrics (e.g., "achieved 95% accuracy", "reduced processing times by 20%"). Instead, **EXPLAIN** the *context*, the *action* you took, and the *impact* in a narrative way. Briefly mention the metric *as part of the explanation* if relevant, but focus on the *how* and *why*.
+        *   *Example Bad:* "I improved object detection by 30%."
+        *   *Example Good:* "In one project involving autonomous robotics, the initial object detection wasn't reliable under certain lighting conditions. I tackled this by implementing [Specific Technique/Action described in resume, e.g., 'custom pre-processing techniques and fine-tuning the CNN model']. This involved [brief detail of the action, e.g., 'analyzing failure cases and augmenting the training data']. As a result, we saw a significant improvement in detection accuracy, making the system more reliable in real-world tests."
+    5.  **IMPLICIT STAR METHOD (for behavioral Qs):** When relevant (e.g., "Tell me about a challenge..."), structure the answer around a specific Situation/Task, the Action you took (focus here!), and the Result/Impact (explained, not just listed).
+    6.  **RELEVANCE TO JOB:** Highlight skills/experiences from the resume that *directly align* with the provided Job Description details.
+    7.  **CONCISENESS:** Keep the answer focused and reasonably concise (aim for 200-300 words).
+    8.  **OUTPUT:** Respond ONLY with the candidate's answer. No extra greetings or explanations.
+
+    If clarification on the question's intent is needed, make reasonable assumptions based on the resume and job context.`;
 
     // Add job context to the user message for better grounding if available
     let userQuestionContext = `Question: ${question}\n\nMy Resume:\n${resume}`;
@@ -234,13 +250,13 @@ app.post('/api/generate-answer', async (req, res) => {
 
     // Generate the answer using OpenAI's API
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo', // Consider GPT-4 for potentially better adherence
+      model: 'gpt-3.5-turbo', // Strongly consider GPT-4 if quality still lacking
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: userQuestionContext } // Pass resume/job info here
+        { role: 'user', content: userQuestionContext } 
       ],
-      temperature: 0.6, // Slightly lower temp might help with focus
-      max_tokens: 400 // Keep reasonable limit
+      temperature: 0.65, // Slightly increased temp for a bit more variation
+      max_tokens: 400 
     });
 
     // Extract the generated answer
