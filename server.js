@@ -239,12 +239,18 @@ ${jobInfoText ? `The candidate is applying for:${jobInfoText}` : ''}`;
 
 // Serve static files in production
 if (IS_PRODUCTION) {
-  // Set the correct path to the build directory
+  // Set the correct path to the build directory (this was incorrect)
   const buildPath = path.join(__dirname, 'src', 'dist');
   console.log(`Serving static files from: ${buildPath}`);
   
-  // Serve static files
-  app.use(express.static(buildPath));
+  // Serve static files with explicit MIME types for CSS
+  app.use(express.static(buildPath, {
+    setHeaders: (res, path) => {
+      if (path.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css');
+      }
+    }
+  }));
   
   // For any route not matching an API route, serve the index.html
   app.get('*', (req, res) => {
