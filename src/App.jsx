@@ -580,7 +580,7 @@ function App() {
   const handleJobDescriptionChange = (e) => { setJobDescription(e.target.value); setIsJobInfoDirty(true); };
   const handleJobResponsibilitiesChange = (e) => { setJobResponsibilities(e.target.value); setIsJobInfoDirty(true); };
 
-  // --- Main App Rendering (Always render) --- 
+  // --- Main App Rendering --- 
   if (isDataLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -638,148 +638,8 @@ function App() {
           
           {/* Left Column (Main Flow) - Takes 2/3 width on large screens */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Step 1: Resume */}
-            <Card title="1. Your Resume">
-              <UploadDropzone
-                resumeText={resumeText}
-                fileName={fileName}
-                uploadProgress={uploadProgress}
-                onFileChange={handleFileChange}
-                onClearResume={() => { setResumeText(''); setFileName(''); }}
-              />
-
-              {/* Manual Input Section */} 
-              {!resumeText && (
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                  <Button 
-                    variant="text"
-                    onClick={() => setManualInputMode(!manualInputMode)}
-                    className="text-xs px-0 py-1 h-auto"
-                  >
-                    {manualInputMode ? "Hide manual input" : "Or paste resume text manually"}
-                  </Button>
-                  
-                  {manualInputMode && (
-                    <div className="mt-3">
-                      <TextAreaGroup 
-                        id="manualResume"
-                        label="Paste Resume Text"
-                        value={resumeText} // Bind to resumeText state
-                        onChange={(e) => setResumeText(e.target.value)}
-                        placeholder="Copy and paste your resume text here..."
-                        rows={10}
-                        required
-                      />
-                      {resumeText && (
-                        <Button 
-                          variant="secondary" 
-                          onClick={() => {
-                            setManualInputMode(false);
-                            setFileName('Manual entry');
-                          }}
-                          className="mt-3 text-xs"
-                          icon={CheckIcon}
-                        >
-                          Use Pasted Text
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Resume Preview & Clear Buttons */}
-              {resumeText && (
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Resume Preview</h3>
-                  <div className="bg-gray-50 rounded border border-gray-200 p-3 max-h-40 overflow-y-auto text-xs text-gray-600 whitespace-pre-line mb-3">
-                    {resumeText.substring(0, 500)}{resumeText.length > 500 ? '...' : ''}
-                  </div>
-                  <div className="flex space-x-2">
-                    <Button 
-                      variant="danger"
-                      onClick={() => { setResumeText(''); setFileName(''); }}
-                      className="text-xs"
-                    >
-                      Clear Resume & Job Data
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </Card>
-
-            {/* Step 2: Job Info (Now Collapsible) */}
-            <Card 
-              title="2. Job Information (Optional)"
-            >
-              <div className="flex justify-between items-center mb-4">
-                  <p className="text-sm text-gray-500">
-                    Add details about the job to tailor answers more accurately.
-                  </p>
-                  <Button 
-                    variant="text"
-                    onClick={() => setIsJobInfoVisible(!isJobInfoVisible)}
-                    className="text-xs px-2 py-1 h-auto flex items-center gap-1 text-gray-500 hover:text-gray-700"
-                  >
-                    {isJobInfoVisible ? (
-                      <ChevronUpIcon className="h-4 w-4" />
-                    ) : (
-                      <ChevronDownIcon className="h-4 w-4" />
-                    )}
-                    {isJobInfoVisible ? 'Collapse' : 'Expand'}
-                  </Button>
-                </div>
-
-              {/* Collapsible Content */}
-              {isJobInfoVisible && (
-                <div className="space-y-4 pt-4 border-t border-gray-100">
-                  <InputGroup
-                    label="Job Title"
-                    id="jobTitle"
-                    value={jobTitle}
-                    onChange={handleJobTitleChange}
-                    placeholder="e.g. Frontend Developer"
-                  />
-                  <InputGroup
-                    label="Company"
-                    id="jobCompany"
-                    value={jobCompany}
-                    onChange={handleJobCompanyChange}
-                    placeholder="e.g. Tech Solutions Inc."
-                  />
-                  <TextAreaGroup
-                    label="Job Description"
-                    id="jobDescription"
-                    value={jobDescription}
-                    onChange={handleJobDescriptionChange}
-                    placeholder="Copy and paste the job description here..."
-                    rows={4}
-                  />
-                  <TextAreaGroup
-                    label="Key Responsibilities"
-                    id="jobResponsibilities"
-                    value={jobResponsibilities}
-                    onChange={handleJobResponsibilitiesChange}
-                    placeholder="List the key responsibilities from the job description..."
-                    rows={3}
-                  />
-                  {/* Save Button */}
-                  <div className="flex justify-end pt-2">
-                    <Button
-                      onClick={saveJobInfoToDb}
-                      disabled={!isJobInfoDirty || isSavingJobInfo}
-                      loading={isSavingJobInfo}
-                      size="sm"
-                    >
-                      {isSavingJobInfo ? 'Saving...' : (isJobInfoDirty ? 'Save Job Info' : 'Job Info Saved')}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </Card>
-
-            {/* Step 3: Question & Answer */}
-            <Card title="3. Ask an Interview Question">
+            {/* Step 1 (Now): Question & Answer */} 
+            <Card title="1. Ask an Interview Question">
               <div className="flex justify-end mb-2">
                 <Button 
                   variant="text" 
@@ -845,7 +705,7 @@ function App() {
               </div>
               
               <Button
-                type="button" // Changed from submit as it's not in a form
+                type="button"
                 onClick={generateAnswer}
                 disabled={isLoading || !question || !resumeText}
                 isLoading={isLoading}
@@ -856,7 +716,7 @@ function App() {
               </Button>
               
               {!resumeText && (
-                <p className="text-xs text-red-500 mt-2 text-center">Please provide resume text to enable answer generation.</p>
+                <p className="text-xs text-red-500 mt-2 text-center">Please provide resume text below to enable answer generation.</p>
               )}
             </Card>
 
@@ -871,6 +731,147 @@ function App() {
                 />
               </div>
             )}
+
+            {/* Step 2 & 3 (Now): Resume & Job Info Side-by-Side */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Resume Card */}
+                <Card title="2. Your Resume">
+                  <UploadDropzone
+                    resumeText={resumeText}
+                    fileName={fileName}
+                    uploadProgress={uploadProgress}
+                    onFileChange={handleFileChange}
+                    onClearResume={() => { setResumeText(''); setFileName(''); }}
+                  />
+
+                  {/* Manual Input Section */} 
+                  {!resumeText && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <Button 
+                        variant="text"
+                        onClick={() => setManualInputMode(!manualInputMode)}
+                        className="text-xs px-0 py-1 h-auto"
+                      >
+                        {manualInputMode ? "Hide manual input" : "Or paste resume text manually"}
+                      </Button>
+                      
+                      {manualInputMode && (
+                        <div className="mt-3">
+                          <TextAreaGroup 
+                            id="manualResume"
+                            label="Paste Resume Text"
+                            value={resumeText} // Bind to resumeText state
+                            onChange={(e) => setResumeText(e.target.value)}
+                            placeholder="Copy and paste your resume text here..."
+                            rows={10}
+                            required
+                          />
+                          {resumeText && (
+                            <Button 
+                              variant="secondary" 
+                              onClick={() => {
+                                setManualInputMode(false);
+                                setFileName('Manual entry');
+                              }}
+                              className="mt-3 text-xs"
+                              icon={CheckIcon}
+                            >
+                              Use Pasted Text
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Resume Preview & Clear Buttons */}
+                  {resumeText && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Resume Preview</h3>
+                      <div className="bg-gray-50 rounded border border-gray-200 p-3 max-h-40 overflow-y-auto text-xs text-gray-600 whitespace-pre-line mb-3">
+                        {resumeText.substring(0, 500)}{resumeText.length > 500 ? '...' : ''}
+                      </div>
+                      <div className="flex space-x-2">
+                        <Button 
+                          variant="danger"
+                          onClick={() => { setResumeText(''); setFileName(''); }}
+                          className="text-xs"
+                        >
+                          Clear Resume & Job Data
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </Card>
+
+                {/* Job Info Card */}
+                <Card title="3. Job Information (Optional)">
+                  <div className="flex justify-between items-center mb-4">
+                      <p className="text-sm text-gray-500">
+                        Add details about the job to tailor answers more accurately.
+                      </p>
+                      <Button 
+                        variant="text"
+                        onClick={() => setIsJobInfoVisible(!isJobInfoVisible)}
+                        className="text-xs px-2 py-1 h-auto flex items-center gap-1 text-gray-500 hover:text-gray-700"
+                      >
+                        {isJobInfoVisible ? (
+                          <ChevronUpIcon className="h-4 w-4" />
+                        ) : (
+                          <ChevronDownIcon className="h-4 w-4" />
+                        )}
+                        {isJobInfoVisible ? 'Collapse' : 'Expand'}
+                      </Button>
+                    </div>
+
+                  {/* Collapsible Content */}
+                  {isJobInfoVisible && (
+                    <div className="space-y-4 pt-4 border-t border-gray-100">
+                      <InputGroup
+                        label="Job Title"
+                        id="jobTitle"
+                        value={jobTitle}
+                        onChange={handleJobTitleChange}
+                        placeholder="e.g. Frontend Developer"
+                      />
+                      <InputGroup
+                        label="Company"
+                        id="jobCompany"
+                        value={jobCompany}
+                        onChange={handleJobCompanyChange}
+                        placeholder="e.g. Tech Solutions Inc."
+                      />
+                      <TextAreaGroup
+                        label="Job Description"
+                        id="jobDescription"
+                        value={jobDescription}
+                        onChange={handleJobDescriptionChange}
+                        placeholder="Copy and paste the job description here..."
+                        rows={4}
+                      />
+                      <TextAreaGroup
+                        label="Key Responsibilities"
+                        id="jobResponsibilities"
+                        value={jobResponsibilities}
+                        onChange={handleJobResponsibilitiesChange}
+                        placeholder="List the key responsibilities from the job description..."
+                        rows={3}
+                      />
+                      {/* Save Button */}
+                      <div className="flex justify-end pt-2">
+                        <Button
+                          onClick={saveJobInfoToDb}
+                          disabled={!isJobInfoDirty || isSavingJobInfo}
+                          loading={isSavingJobInfo}
+                          size="sm"
+                        >
+                          {isSavingJobInfo ? 'Saving...' : (isJobInfoDirty ? 'Save Job Info' : 'Job Info Saved')}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </Card>
+            </div>
           </div>
 
           {/* Right Column (History) - Takes 1/3 width on large screens */}

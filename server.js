@@ -223,27 +223,24 @@ app.post('/api/generate-answer', async (req, res) => {
       jobInfoText += `\nKey Responsibilities Summary: ${jobResponsibilities.substring(0, 300)}...`; // Limit length
     }
 
-    // Construct prompt for the AI - REFINED FOR BETTER QUALITY
-    const systemPrompt = `You are an expert interview coach simulating a candidate answering an interview question. Your goal is to help the actual candidate craft a compelling and authentic answer.
-    - Write in the first person ("I", "my") as if you ARE the candidate.
-    - Sound natural, conversational, and confident, not robotic or like a template. Avoid overly corporate jargon unless it's directly relevant to the experience.
-    - **Focus on Storytelling (STAR method implicitly):** For behavioral questions, describe a specific Situation/Task, the Action you took, and the Result/Impact. For technical or experience questions, provide concrete examples.
-    - **Show, Don't Just Tell:** Instead of saying "achieved X% improvement", briefly describe *how* you achieved it or what the impact *looked like*. Quantify results where possible and meaningful, but prioritize explaining the *action* and *context*. Connect the example clearly back to the question asked.
-    - **Relevance is Key:** Draw ONLY from the provided resume text. Select the *most relevant* skills, experiences, or achievements from the resume to answer the specific question asked and relate them to the job information provided (if any).
-    - **Conciseness:** Keep answers focused and concise (ideally under 300 words, max 400). Get straight to the point while providing enough detail.
-    - **Authenticity:** Avoid making up experiences not present in the resume. The goal is to leverage the candidate's actual background effectively.
-    ${jobInfoText ? `\nThe candidate is applying for this role:\n${jobInfoText}` : ''}
-    Respond ONLY with the candidate's answer, do not add any extra conversational text before or after the answer itself.`;
+    // Construct prompt for the AI - REFINED V4
+    const systemPrompt = `You are an expert AI assistant helping a user succeed in a job interview. The user is providing:\n1. Their resume (skills, experiences, projects).\n2. The job description (company, role, responsibilities).\n3. A specific interview question.\n\nYour task is to generate an interview answer that is:\n- Directly responsive to the specific question asked.\n- Draws *only* from the provided resume and job description. Do not hallucinate or add information not present.\n- Conversational and natural in tone, as if the user is speaking confidently.\n- Context-aware: While generating, try to maintain consistency if simulating a sequence, but prioritize answering the current question accurately based on resume/JD.\n- Highlights the most relevant skills and experiences from the resume that align with the job description details provided.\n- Uses STAR format (Situation, Task, Action, Result) implicitly for behavioral questions (\`Tell me about a time...\`, \`Describe a challenge...\`) where appropriate. Focus on the Action and Result/Impact.\n- Prioritizes clarity, confidence, and genuine relevance.\n- If clarification on the question's intent is needed, make reasonable assumptions based on the resume and job context.\n\nOutput ONLY the generated answer for the candidate. Do not include any introductory or concluding remarks.`;
+
+    // Add job context to the user message for better grounding if available
+    let userQuestionContext = `Question: ${question}\n\nMy Resume:\n${resume}`;
+    if (jobInfoText) {
+      userQuestionContext += `\n\nTarget Job Info:\n${jobInfoText}`;
+    }
 
     // Generate the answer using OpenAI's API
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-3.5-turbo', // Consider GPT-4 for potentially better adherence
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Question: ${question}\n\nMy Resume:\n${resume}` }
+        { role: 'user', content: userQuestionContext } // Pass resume/job info here
       ],
-      temperature: 0.7,
-      max_tokens: 500
+      temperature: 0.6, // Slightly lower temp might help with focus
+      max_tokens: 400 // Keep reasonable limit
     });
 
     // Extract the generated answer
