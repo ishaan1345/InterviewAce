@@ -11,8 +11,28 @@ import rateLimit from 'express-rate-limit';
 import { execSync } from 'child_process';
 // Import the Tailwind middleware
 import { tailwindMiddleware, generateInlineTailwind } from './tailwind-inline.js';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
+
+// Initialize Supabase Client (Server-side)
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('ERROR: SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables are required for the backend.');
+  // Optionally exit if Supabase is critical, or continue if it's progressively enhanced
+  // process.exit(1);
+}
+
+// Note: We are initializing Supabase here, but database interactions will be added later.
+// Use the service key for backend operations that might require elevated privileges.
+const supabaseAdmin = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+if (supabaseAdmin) {
+  console.log('Supabase admin client initialized successfully.');
+} else {
+  console.warn('Supabase admin client could not be initialized. Check environment variables.');
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -197,20 +217,23 @@ app.post('/api/generate-answer', async (req, res) => {
       jobInfoText += `\nCompany: ${jobCompany}`;
     }
     if (jobDescription) {
-      jobInfoText += `\nJob Description: ${jobDescription}`;
+      jobInfoText += `\nJob Description Summary: ${jobDescription.substring(0, 300)}...`; // Limit length
     }
     if (jobResponsibilities) {
-      jobInfoText += `\nKey Responsibilities: ${jobResponsibilities}`;
+      jobInfoText += `\nKey Responsibilities Summary: ${jobResponsibilities.substring(0, 300)}...`; // Limit length
     }
 
-    // Construct prompt for the AI
-    const systemPrompt = `You are an expert interview coach. Your goal is to help the candidate craft a compelling answer to the interview question.
-    
-Make your answer urgent, direct, and conversational. Write in first person as if you ARE the candidate, using "I" statements. 
-Craft an answer that is authentic and sounds like a real person speaking, not a template.
-Focus on specific skills, experiences and achievements from their resume that are most relevant to the position.
-Keep answers concise (maximum 300 words). Be confident but not arrogant.
-${jobInfoText ? `The candidate is applying for:${jobInfoText}` : ''}`;
+    // Construct prompt for the AI - REFINED FOR BETTER QUALITY
+    const systemPrompt = `You are an expert interview coach simulating a candidate answering an interview question. Your goal is to help the actual candidate craft a compelling and authentic answer.
+    - Write in the first person ("I", "my") as if you ARE the candidate.
+    - Sound natural, conversational, and confident, not robotic or like a template. Avoid overly corporate jargon unless it's directly relevant to the experience.
+    - **Focus on Storytelling (STAR method implicitly):** For behavioral questions, describe a specific Situation/Task, the Action you took, and the Result/Impact. For technical or experience questions, provide concrete examples.
+    - **Show, Don't Just Tell:** Instead of saying "achieved X% improvement", briefly describe *how* you achieved it or what the impact *looked like*. Quantify results where possible and meaningful, but prioritize explaining the *action* and *context*. Connect the example clearly back to the question asked.
+    - **Relevance is Key:** Draw ONLY from the provided resume text. Select the *most relevant* skills, experiences, or achievements from the resume to answer the specific question asked and relate them to the job information provided (if any).
+    - **Conciseness:** Keep answers focused and concise (ideally under 300 words, max 400). Get straight to the point while providing enough detail.
+    - **Authenticity:** Avoid making up experiences not present in the resume. The goal is to leverage the candidate's actual background effectively.
+    ${jobInfoText ? `\nThe candidate is applying for this role:\n${jobInfoText}` : ''}
+    Respond ONLY with the candidate's answer, do not add any extra conversational text before or after the answer itself.`;
 
     // Generate the answer using OpenAI's API
     const response = await openai.chat.completions.create({
