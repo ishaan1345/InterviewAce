@@ -11,7 +11,7 @@ import rateLimit from 'express-rate-limit';
 import { execSync } from 'child_process';
 // Import the Tailwind middleware
 import { tailwindMiddleware, generateInlineTailwind } from './tailwind-inline.js';
-import { createClient } from '@supabase/supabase-js';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 // Import Deepgram SDK
 import { createClient as createDeepgramClient } from "@deepgram/sdk";
 
@@ -29,7 +29,7 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 // Note: We are initializing Supabase here, but database interactions will be added later.
 // Use the service key for backend operations that might require elevated privileges.
-const supabaseAdmin = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabaseAdmin = supabaseUrl && supabaseServiceKey ? createSupabaseClient(supabaseUrl, supabaseServiceKey) : null;
 if (supabaseAdmin) {
   console.log('Supabase admin client initialized successfully.');
 } else {
