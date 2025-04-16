@@ -251,6 +251,9 @@ app.use((req, res, next) => {
   // Log all requests except for static assets to reduce noise
   if (!req.path.includes('.')) {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  } else if (req.path.includes('.css')) {
+    // Log CSS file requests to debug styling issues
+    console.log(`[${new Date().toISOString()}] CSS request: ${req.path}`);
   }
   next();
 });
@@ -258,9 +261,19 @@ app.use((req, res, next) => {
 // Apply tailwind middleware for HTML responses
 app.use(tailwindMiddleware(buildPath));
 
+// Generate inline tailwind styles for production
+if (IS_PRODUCTION) {
+  try {
+    generateInlineTailwind();
+    console.log('Generated inline Tailwind CSS for production');
+  } catch (err) {
+    console.error('Error generating inline Tailwind:', err);
+  }
+}
+
 // Serve static files with proper cache headers
 app.use(express.static(buildPath, {
-  maxAge: '1y',
+  maxAge: process.env.NODE_ENV === 'production' ? '1d' : '0', // Shorter cache in production for quick updates
   etag: true,
   index: false, // Don't automatically serve index.html
   setHeaders: (res, filePath) => {
@@ -269,6 +282,11 @@ app.use(express.static(buildPath, {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
+    }
+    // Ensure CSS files are properly cached and have correct content type
+    if (filePath.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css');
+      res.setHeader('Cache-Control', 'public, max-age=0'); // No caching for CSS during deployment
     }
   }
 }));
