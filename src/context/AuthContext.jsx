@@ -61,24 +61,39 @@ export const AuthProvider = ({ children }) => {
     // Listen for auth changes and fetch profile accordingly
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        console.log("Auth state changed:", _event, session);
+        console.log("Auth state changed event:", _event);
         setSession(session);
         const currentUser = session?.user ?? null;
         setUser(currentUser);
+        
+        // Ensure loading is handled correctly even with potential profile fetch errors
         if (currentUser) {
-          // Avoid fetching profile again if user object is the same (e.g., token refresh)
-          // Simple check for now, might need refinement
-          if (currentUser.id !== profile?.id) { 
+          // Avoid fetching profile again if user object hasn't changed significantly
+          // Simple ID check for now.
+          if (!profile || currentUser.id !== profile.id) { 
             setLoading(true); // Show loading while profile fetches
-            const userProfile = await fetchProfile(currentUser.id);
-            setProfile(userProfile);
-            setLoading(false);
+            console.log("[Auth State Change] Fetching profile for user:", currentUser.id);
+            try {
+              const userProfile = await fetchProfile(currentUser.id);
+              console.log("[Auth State Change] Profile fetch result:", userProfile);
+              setProfile(userProfile); 
+            } catch (error) {
+              console.error("[Auth State Change] EXCEPTION during profile fetch:", error);
+              setProfile(null); // Ensure profile is null on error
+            } finally {
+              console.log("[Auth State Change] Setting loading to false.");
+              setLoading(false); // ALWAYS set loading false after attempt
+            }
+          } else {
+            // User exists but profile hasn't changed, ensure loading is false
+            if (loading) setLoading(false);
           }
         } else {
-          setProfile(null); // Clear profile on logout
+          // No user, clear profile and ensure loading is false
+          console.log("[Auth State Change] No user, clearing profile and setting loading false.");
+          setProfile(null); 
+          setLoading(false); 
         }
-        // Ensure loading is false if no user
-        if (!currentUser) setLoading(false);
       }
     );
 
