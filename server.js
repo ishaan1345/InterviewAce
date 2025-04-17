@@ -74,6 +74,27 @@ const SERVER_LOCK_FILE = path.join(__dirname, '.server.lock');
 // Load environment variables
 import 'dotenv/config';
 
+// Map server environment variables to frontend variables
+// This ensures Heroku env vars get passed to the frontend
+const FRONTEND_ENV_VARS = {
+  // Map server-side vars to frontend Vite vars
+  SUPABASE_URL: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+  VITE_SUPABASE_URL: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+  SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY,
+  VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY
+};
+
+// Set mapped variables in process.env for later use
+Object.entries(FRONTEND_ENV_VARS).forEach(([key, value]) => {
+  if (value) process.env[key] = value;
+});
+
+// Log frontend environment variables (excluding sensitive information)
+console.log('Frontend environment variables configured:', Object.keys(FRONTEND_ENV_VARS)
+  .filter(key => FRONTEND_ENV_VARS[key])
+  .map(key => key.includes('KEY') ? `${key}: [REDACTED]` : `${key}: ${FRONTEND_ENV_VARS[key].substring(0, 8)}...`)
+);
+
 // Get API key from environment
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 if (!OPENAI_API_KEY) {
@@ -452,7 +473,31 @@ app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) {
     return next();
   }
-  res.sendFile(path.join(buildPath, 'index.html'));
+  
+  // Read the HTML file
+  fs.readFile(path.join(buildPath, 'index.html'), 'utf8', (err, html) => {
+    if (err) {
+      console.error('Error reading index.html:', err);
+      return res.status(500).send('Error loading application');
+    }
+    
+    // Inject frontend environment variables
+    const envScript = `
+      <script>
+        window.__ENV = {
+          SUPABASE_URL: "${FRONTEND_ENV_VARS.VITE_SUPABASE_URL || ''}",
+          SUPABASE_ANON_KEY: "${FRONTEND_ENV_VARS.VITE_SUPABASE_ANON_KEY || ''}"
+        };
+        console.log('[Server] Injected environment variables for frontend');
+      </script>
+    `;
+    
+    // Insert script right before the closing </head> tag
+    const modifiedHtml = html.replace('</head>', `${envScript}</head>`);
+    
+    // Send the modified HTML
+    res.send(modifiedHtml);
+  });
 });
 
 // Health check endpoint

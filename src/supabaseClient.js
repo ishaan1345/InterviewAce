@@ -1,12 +1,28 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Try environment variables first, fallback to hard-coded values if needed
-// TEMPORARY FIX: Hardcoded fallbacks should be removed before final production deployment
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://kiquqlaijpfebwymwlor.supabase.co";
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcXVxbGFpanBmZWJ3eW13bG9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ2ODEwODYsImV4cCI6MjA2MDI1NzA4Nn0.q3iuKlNj48HCCLjbgIrs52MNT3tPrajWGQmwsOPmsho";
+// In production, environment variables are injected at build time as part of the window object
+// Try environment variables first, fallback to window.__ENV if available, then to hardcoded values
+const getEnvVar = (viteKey, windowKey) => {
+  // First try Vite env vars which work in development
+  if (import.meta.env[viteKey]) return import.meta.env[viteKey];
+  
+  // Then try window.__ENV which can be used in production when set by server
+  if (typeof window !== 'undefined' && window.__ENV && window.__ENV[windowKey]) {
+    return window.__ENV[windowKey];
+  }
+  
+  // Fallback to hardcoded values as last resort
+  if (viteKey === 'VITE_SUPABASE_URL') return "https://kiquqlaijpfebwymwlor.supabase.co";
+  if (viteKey === 'VITE_SUPABASE_ANON_KEY') return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcXVxbGFpanBmZWJ3eW13bG9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ2ODEwODYsImV4cCI6MjA2MDI1NzA4Nn0.q3iuKlNj48HCCLjbgIrs52MNT3tPrajWGQmwsOPmsho";
+  
+  return null;
+};
+
+const supabaseUrl = getEnvVar('VITE_SUPABASE_URL', 'SUPABASE_URL');
+const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY');
 
 // Add diagnostic info
-console.log(`[supabaseClient] Initializing with URL: ${supabaseUrl.substring(0, 15)}...`);
+console.log(`[supabaseClient] Initializing with URL: ${supabaseUrl ? supabaseUrl.substring(0, 15) + '...' : 'MISSING'}`);
 console.log(`[supabaseClient] Anon key present: ${!!supabaseAnonKey}`);
 
 let supabase = null;
