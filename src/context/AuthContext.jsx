@@ -11,24 +11,32 @@ export const AuthProvider = ({ children }) => {
 
   // Function to fetch profile data
   const fetchProfile = async (userId) => {
-    if (!supabase || !userId) return null;
+    if (!supabase || !userId) {
+      // Throw an error if supabase client isn't ready or no userId provided
+      throw new Error("Supabase client not available or userId missing for fetchProfile.");
+    }
+
+    console.log("[fetchProfile] Attempting for user:", userId);
     try {
-      console.log("Fetching profile for user:", userId);
       const { data, error, status } = await supabase
         .from('profiles')
         .select(`is_subscribed, full_name`) // Select needed fields
         .eq('id', userId)
         .single();
 
-      if (error && status !== 406) { // 406 means no rows found, which is ok if profile not created yet
-        console.error('Error fetching profile:', error);
-        return null;
+      // Handle Supabase-specific errors (like RLS)
+      if (error && status !== 406) { // 406 means no rows found, treat as non-error for profile creation flow
+        console.error('[fetchProfile] Supabase query error:', error);
+        throw error; // Re-throw the Supabase error object
       } 
-      console.log("Profile data fetched:", data);
-      return data;
+
+      console.log("[fetchProfile] Profile data fetched:", data);
+      return data; // Return data if successful (can be null if status 406)
+
     } catch (error) {
-      console.error('Exception fetching profile:', error);
-      return null;
+      // Catch exceptions from the await call itself or re-thrown Supabase errors
+      console.error('[fetchProfile] Exception during fetch:', error);
+      throw error; // Re-throw the caught error to ensure caller handles it
     }
   };
 
