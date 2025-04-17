@@ -40,22 +40,50 @@ export const AuthProvider = ({ children }) => {
     }
 
     setLoading(true);
+
     // Check initial session and fetch profile if session exists
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       const currentUser = session?.user ?? null;
       setUser(currentUser);
+      let initialProfileFetchAttempted = false; // Flag to prevent redundant setLoading(false)
+
       if (currentUser) {
-        const userProfile = await fetchProfile(currentUser.id);
-        setProfile(userProfile);
+        console.log("[Initial Load] Fetching profile for user:", currentUser.id);
+        initialProfileFetchAttempted = true;
+        try {
+          const userProfile = await fetchProfile(currentUser.id);
+          console.log("[Initial Load] Profile fetch result:", userProfile);
+          setProfile(userProfile);
+        } catch (error) {
+          console.error("[Initial Load] EXCEPTION during profile fetch:", error);
+          setProfile(null); // Ensure profile is null on error
+        } finally {
+          // Ensure loading is only set once
+          if (loading) { // Check if loading is still true
+            console.log("[Initial Load] Setting loading false (after profile fetch attempt).");
+            setLoading(false); // ALWAYS set loading false after initial profile fetch attempt
+          }
+        }
       } else {
-        setProfile(null); // Clear profile on logout
+        setProfile(null); // Clear profile if no initial session
       }
-      setLoading(false);
+
+      // Only set loading false here if profile fetch wasn't attempted (no user)
+      // and it hasn't already been set in the finally block above
+      if (!initialProfileFetchAttempted && loading) {
+         console.log("[Initial Load] No user, setting loading false.");
+         setLoading(false);
+      }
+
     }).catch(err => {
       console.error("Error getting initial session:", err);
       setProfile(null);
-      setLoading(false);
+      // Ensure loading is only set once even in catch
+      if (loading) { 
+        console.log("[Initial Load] Setting loading false (in getSession catch).");
+        setLoading(false); 
+      }
     });
 
     // Listen for auth changes and fetch profile accordingly
