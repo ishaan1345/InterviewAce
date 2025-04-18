@@ -184,10 +184,10 @@ export const AuthProvider = ({ children }) => {
 
   // Add a conditional rendering wrapper with better error states
   const renderContent = () => {
-    if (loading) {
-      // During loading, show nothing
-      return null;
-    }
+    // if (loading) {
+    //   // During loading, show nothing
+    //   return null;
+    // }
     
     // Handle any potential rendering issues
     try {

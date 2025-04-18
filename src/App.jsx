@@ -32,6 +32,9 @@ import Modal from './components/common/Modal';
 // Import Supabase client
 import { supabase } from './supabaseClient'; // Import Supabase client
 
+// Import Loading Spinner component (assuming it exists or we create it)
+import LoadingSpinner from './components/common/LoadingSpinner';
+
 // Import Deepgram SDK
 import { createClient } from "@deepgram/sdk";
 
@@ -249,7 +252,7 @@ const LiveInterviewMode = ({ onEndSession }) => {
 };
 
 function App() {
-  const { user, session, signOut, profile, isSubscribed } = useAuth(); // Get profile and subscription status
+  const { user, session, signOut, profile, isSubscribed, loading: authLoading } = useAuth(); // Get profile, subscription status, and loading state
   
   // State for Auth Modal
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -290,6 +293,15 @@ function App() {
   const fileInputRef = useRef(null);
   const recognitionRef = useRef(null);
   const answerRef = useRef(null);
+
+  // Show Loading Spinner if Auth is loading
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <LoadingSpinner />
+      </div>
+    );
+  }
 
   // --- Load User Data from Supabase --- 
   useEffect(() => {
