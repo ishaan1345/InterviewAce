@@ -176,7 +176,7 @@ const releaseLock = () => {
 // Configure CORS
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://interviewace.herokuapp.com', 'https://www.interviewace.com'] 
+    ? ['https://interviewace.herokuapp.com', 'https://www.interviewace.com', 'https://interviewace-app.herokuapp.com', 'https://interviewace-app-a45db4d54d28.herokuapp.com'] 
     : 'http://localhost:5173',
   methods: ['GET', 'POST'],
   credentials: true
@@ -464,6 +464,11 @@ app.use(express.static(buildPath, {
       res.setHeader('Content-Type', 'text/css');
       res.setHeader('Cache-Control', IS_PRODUCTION ? 'public, max-age=86400' : 'no-cache');
     }
+    // Ensure JavaScript files have correct headers
+    if (filePath.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+      res.setHeader('Cache-Control', IS_PRODUCTION ? 'public, max-age=86400' : 'no-cache');
+    }
   }
 }));
 
@@ -490,8 +495,8 @@ app.get('*', (req, res, next) => {
     // Add debug information
     console.log(`[HTML Serving] Found and read index.html (${html.length} bytes)`);
     
-    // Inject frontend environment variables
-    const envScript = `
+    // Inject frontend environment variables and stylesheet in one replacement
+    const injectContent = `
       <script>
         window.__ENV = {
           SUPABASE_URL: "${FRONTEND_ENV_VARS.VITE_SUPABASE_URL || ''}",
@@ -499,18 +504,16 @@ app.get('*', (req, res, next) => {
         };
         console.log('[Server] Injected environment variables for frontend');
       </script>
-    `;
+      <link rel="stylesheet" href="/default-styles.css">
+    </head>`;
     
-    // Insert script right before the closing </head> tag
-    const modifiedHtml = html.replace('</head>', `${envScript}</head>`);
+    // Do a single replacement for the head tag
+    const modifiedHtml = html.replace('</head>', injectContent);
     
-    // Add another default stylesheet link to ensure styles load
-    const withDefaultStyles = modifiedHtml.replace('</head>', `<link rel="stylesheet" href="/default-styles.css"></head>`);
-    
-    console.log(`[HTML Serving] Updated index.html with default styles link`);
+    console.log(`[HTML Serving] Updated index.html with environment variables and default styles`);
     
     // Send the modified HTML
-    res.send(withDefaultStyles);
+    res.send(modifiedHtml);
   });
 });
 
