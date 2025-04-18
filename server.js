@@ -421,6 +421,7 @@ app.post('/api/deepgram/token', async (req, res) => {
 
 // Build path for static files
 const buildPath = path.join(__dirname, 'dist');
+const srcDistPath = path.join(__dirname, 'src', 'dist'); // Add src/dist path for direct access
 
 // Debug middleware to help diagnose static file serving issues
 app.use((req, res, next) => {
@@ -430,6 +431,9 @@ app.use((req, res, next) => {
   } else if (req.path.includes('.css')) {
     // Log CSS file requests to debug styling issues
     console.log(`[${new Date().toISOString()}] CSS request: ${req.path}`);
+  } else if (req.path.includes('.js')) {
+    // Log JS file requests to debug script issues
+    console.log(`[${new Date().toISOString()}] JS request: ${req.path}`);
   }
   next();
 });
@@ -447,9 +451,43 @@ app.use(tailwindMiddleware(buildPath));
 //   }
 // }
 
-// Serve static files with proper cache headers
+// Serve static files in reverse priority order (more specific paths first)
+
+// 1. Serve from src/dist in case any paths reference this directly
+app.use('/src/dist', express.static(srcDistPath, {
+  maxAge: '1d',
+  etag: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css');
+    } else if (filePath.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    }
+  }
+}));
+
+// 2. Serve assets from the root dist folder
+app.use('/assets', express.static(path.join(buildPath, 'assets'), {
+  maxAge: '1d',
+  etag: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css');
+    } else if (filePath.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    }
+  }
+}));
+
+// 3. Serve the default-styles.css from root directory
+app.use(express.static(__dirname, {
+  maxAge: '1d',
+  etag: true
+}));
+
+// 4. Serve all other static files from the dist directory
 app.use(express.static(buildPath, {
-  maxAge: '1d', // Set to 1 day for all static assets
+  maxAge: '1d',
   etag: true,
   index: false, // Don't automatically serve index.html
   setHeaders: (res, filePath) => {
@@ -459,7 +497,7 @@ app.use(express.static(buildPath, {
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
     }
-    // Ensure CSS files have correct headers and no caching in development
+    // Ensure CSS files have correct headers
     if (filePath.endsWith('.css')) {
       res.setHeader('Content-Type', 'text/css');
       res.setHeader('Cache-Control', IS_PRODUCTION ? 'public, max-age=86400' : 'no-cache');
@@ -470,12 +508,6 @@ app.use(express.static(buildPath, {
       res.setHeader('Cache-Control', IS_PRODUCTION ? 'public, max-age=86400' : 'no-cache');
     }
   }
-}));
-
-// Serve the default-styles.css from root directory
-app.use(express.static(__dirname, {
-  maxAge: '1d',
-  etag: true
 }));
 
 // Serve index.html for all other routes - client-side routing
@@ -495,6 +527,15 @@ app.get('*', (req, res, next) => {
     // Add debug information
     console.log(`[HTML Serving] Found and read index.html (${html.length} bytes)`);
     
+    // Fix asset paths if needed - ensure no src/dist prefix in paths
+    let fixedHtml = html;
+    
+    // Fix paths in script tags - replace src="/src/dist/assets/ with src="/assets/
+    fixedHtml = fixedHtml.replace(/src="\/src\/dist\/assets\//g, 'src="/assets/');
+    
+    // Fix paths in link tags - replace href="/src/dist/assets/ with href="/assets/
+    fixedHtml = fixedHtml.replace(/href="\/src\/dist\/assets\//g, 'href="/assets/');
+    
     // Inject frontend environment variables and stylesheet in one replacement
     const injectContent = `
       <script>
@@ -508,9 +549,9 @@ app.get('*', (req, res, next) => {
     </head>`;
     
     // Do a single replacement for the head tag
-    const modifiedHtml = html.replace('</head>', injectContent);
+    const modifiedHtml = fixedHtml.replace('</head>', injectContent);
     
-    console.log(`[HTML Serving] Updated index.html with environment variables and default styles`);
+    console.log(`[HTML Serving] Updated index.html with environment variables and fixed asset paths`);
     
     // Send the modified HTML
     res.send(modifiedHtml);
