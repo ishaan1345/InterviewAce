@@ -467,6 +467,12 @@ app.use(express.static(buildPath, {
   }
 }));
 
+// Serve the default-styles.css from root directory
+app.use(express.static(__dirname, {
+  maxAge: '1d',
+  etag: true
+}));
+
 // Serve index.html for all other routes - client-side routing
 app.get('*', (req, res, next) => {
   // Skip API routes and forward them to the next middleware
@@ -480,6 +486,9 @@ app.get('*', (req, res, next) => {
       console.error('Error reading index.html:', err);
       return res.status(500).send('Error loading application');
     }
+    
+    // Add debug information
+    console.log(`[HTML Serving] Found and read index.html (${html.length} bytes)`);
     
     // Inject frontend environment variables
     const envScript = `
@@ -495,8 +504,13 @@ app.get('*', (req, res, next) => {
     // Insert script right before the closing </head> tag
     const modifiedHtml = html.replace('</head>', `${envScript}</head>`);
     
+    // Add another default stylesheet link to ensure styles load
+    const withDefaultStyles = modifiedHtml.replace('</head>', `<link rel="stylesheet" href="/default-styles.css"></head>`);
+    
+    console.log(`[HTML Serving] Updated index.html with default styles link`);
+    
     // Send the modified HTML
-    res.send(modifiedHtml);
+    res.send(withDefaultStyles);
   });
 });
 
